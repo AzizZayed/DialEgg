@@ -5,10 +5,11 @@ The equality saturation engine used is [Egglog](https://github.com/egraphs-good/
 ## Getting Started
 
 ### LLVM
-Clone [LLVM](https://github.com/llvm/llvm-project) with tag `llvmorg-18.1.4` or commit `e6c3289804a67ea0bb6a86fadbe454dd93b8d855`. DialEgg has been tested with this version of LLVM only.
+Clone [LLVM](https://github.com/llvm/llvm-project) with commit `7b074fc9362a4a6a5f172dd8936a22fb25eff96b`.
 
 ```bash
-git clone -b llvmorg-18.1.4 --depth 1 https://github.com/llvm/llvm-project.git llvm
+git clone https://github.com/llvm/llvm-project.git llvm
+git checkout 7b074fc9362a4a6a5f172dd8936a22fb25eff96b
 ```
 
 The build LLVM core and MLIR in Release mode. This may take a while.

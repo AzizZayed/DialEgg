@@ -15,7 +15,7 @@ class MatrixMultiplyAssociateRewritePattern : public mlir::OpRewritePattern<mlir
 public:
     MatrixMultiplyAssociateRewritePattern(mlir::MLIRContext* context) : OpRewritePattern<mlir::linalg::MatmulOp>(context) {}
 
-    mlir::LogicalResult matchAndRewrite(mlir::linalg::MatmulOp op, mlir::PatternRewriter& rewriter) const override { // Matches either (XY)Z or X(YZ)
+    mlir::LogicalResult matchAndRewrite(mlir::linalg::MatmulOp op, mlir::PatternRewriter& rewriter) const override {  // Matches either (XY)Z or X(YZ)
         // llvm::outs() << "Matching and rewriting matmul operation: " << op << "\n";
 
         mlir::Value lhs = op.getOperand(0);  // could be X or (XY)
@@ -49,9 +49,9 @@ public:
         // llvm::outs() << "y: " << y << " | " << y.getType() << "\n";
         // llvm::outs() << "z: " << z << " | " << z.getType() << "\n";
 
-        mlir::RankedTensorType xType = x.getType().cast<mlir::RankedTensorType>();
-        mlir::RankedTensorType yType = y.getType().cast<mlir::RankedTensorType>();
-        mlir::RankedTensorType zType = z.getType().cast<mlir::RankedTensorType>();
+        mlir::RankedTensorType xType = cast<mlir::RankedTensorType>(x.getType());
+        mlir::RankedTensorType yType = cast<mlir::RankedTensorType>(y.getType());
+        mlir::RankedTensorType zType = cast<mlir::RankedTensorType>(z.getType());
         mlir::Type opType = xType.getElementType();
 
         // fail if there are any dynamic dimensions
@@ -67,11 +67,11 @@ public:
         int64_t x_yzCost = b * c * d + a * b * d;
         int64_t xy_zCost = a * b * c + a * c * d;
 
-        if (xy_zCost < x_yzCost && is_x_yz) { // (XY)Z is better than X(YZ)
+        if (xy_zCost < x_yzCost && is_x_yz) {  // (XY)Z is better than X(YZ)
             mlir::Type xyType = mlir::RankedTensorType::get({a, c}, opType);
             mlir::Value xyInit = rewriter.create<mlir::tensor::EmptyOp>(op.getLoc(), xyType, mlir::ValueRange {});
             mlir::linalg::MatmulOp xy = rewriter.create<mlir::linalg::MatmulOp>(op.getLoc(), xyType, mlir::ValueRange {x, y}, xyInit);
-            
+
             // llvm::outs() << "xy: " << xy.getResult(0) << "\n";
 
             mlir::Type xyzType = mlir::RankedTensorType::get({a, d}, opType);
@@ -81,7 +81,7 @@ public:
             // llvm::outs() << "Replacing with: " << xyz.getResult(0) << "\n";
 
             rewriter.replaceOp(op, xyz.getResult(0));
-        } else if (x_yzCost < xy_zCost && is_xy_z) { // X(YZ) is better than (XY)Z
+        } else if (x_yzCost < xy_zCost && is_xy_z) {  // X(YZ) is better than (XY)Z
             mlir::Type yzType = mlir::RankedTensorType::get({b, d}, opType);
             mlir::Value yzInit = rewriter.create<mlir::tensor::EmptyOp>(op.getLoc(), yzType, mlir::ValueRange {});
             mlir::linalg::MatmulOp yz = rewriter.create<mlir::linalg::MatmulOp>(op.getLoc(), yzType, mlir::ValueRange {y, z}, yzInit);
@@ -95,7 +95,7 @@ public:
             // llvm::outs() << "Replacing with: " << xyz.getResult(0) << "\n";
 
             rewriter.replaceOp(op, xyz.getResult(0));
-        } // if equal, just keep the original
+        }  // if equal, just keep the original
 
         return mlir::success();
     }
@@ -109,17 +109,17 @@ public:
 
     void runOnOperation() override {
         mlir::func::FuncOp func = getOperation();
-        mlir::MLIRContext *context = &getContext();
+        mlir::MLIRContext* context = &getContext();
 
         llvm::outs() << "Running MatrixMultiplyAssociateRewritePattern on function: " << func.getName() << "\n";
-        
+
         mlir::RewritePatternSet patterns(context);
         patterns.add<MatrixMultiplyAssociateRewritePattern>(context);
 
         mlir::GreedyRewriteConfig config = mlir::GreedyRewriteConfig();
-        config.strictMode = mlir::GreedyRewriteStrictness::ExistingOps;
-        config.useTopDownTraversal = true;
-        if (mlir::failed(mlir::applyPatternsAndFoldGreedily(func, std::move(patterns), config))) {
+        config.setStrictness(mlir::GreedyRewriteStrictness::ExistingOps);
+        config.setUseTopDownTraversal();
+        if (mlir::failed(mlir::applyPatternsGreedily(func, std::move(patterns), config))) {
             signalPassFailure();
         }
 

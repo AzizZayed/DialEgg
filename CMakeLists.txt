@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 3.28)
 project(egg-opt LANGUAGES CXX C)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
-set(LLVM_DIR ~/dev/lib/llvm/build-release/lib/cmake/llvm)
 set(CMAKE_BUILD_TYPE Release)  # Set -DCMAKE_BUILD_TYPE to "Release" to build with optimizations
 find_package(LLVM REQUIRED CONFIG)
 if ("${LLVM_VERSION_MAJOR}" VERSION_LESS 18)
@@ -16,7 +15,6 @@ message(STATUS "LLVM_DEFINITIONS: ${LLVM_DEFINITIONS}")
 message(STATUS "LLVM_INCLUDE_DIRS: ${LLVM_INCLUDE_DIRS}")
 message(STATUS "LLVM_BUILD_LIBRARY_DIR: ${LLVM_BUILD_LIBRARY_DIR}")
 
-set(MLIR_DIR ~/dev/lib/llvm/build-release/lib/cmake/mlir)
 find_package(MLIR REQUIRED CONFIG)
 set(MLIR_BINARY_DIR ${CMAKE_BINARY_DIR})
 message(STATUS "Found MLIR ${MLIR_PACKAGE_VERSION}")

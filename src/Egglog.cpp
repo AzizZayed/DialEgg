@@ -88,7 +88,7 @@ std::string Egglog::removeComment(const std::string& str) {
     return str;
 }
 
-std::vector<std::string> Egglog::splitExpression(std::string opStr) { // linear
+std::vector<std::string> Egglog::splitExpression(std::string opStr) {  // linear
     // The expression must be surrounded by parentheses
     if (opStr.front() != '(' || opStr.back() != ')') {
         llvm::outs() << "Invalid expression: " << opStr << "\n";
@@ -171,15 +171,15 @@ mlir::Type Egglog::parseType(std::string typeStr) {
 
     std::string type = split[0];
     if (type == "F16") {
-        return mlir::FloatType::getF16(&context);
+        return mlir::Float16Type::get(&context);
     } else if (type == "F32") {
-        return mlir::FloatType::getF32(&context);
+        return mlir::Float32Type::get(&context);
     } else if (type == "F64") {
-        return mlir::FloatType::getF64(&context);
+        return mlir::Float64Type::get(&context);
     } else if (type == "F80") {
-        return mlir::FloatType::getF80(&context);
+        return mlir::Float80Type::get(&context);
     } else if (type == "F128") {
-        return mlir::FloatType::getF128(&context);
+        return mlir::Float128Type::get(&context);
     } else if (type == "I1") {
         return mlir::IntegerType::get(&context, 1);
     } else if (type == "I8") {
@@ -299,8 +299,8 @@ std::string Egglog::eggifyType(mlir::Type type) {
         ss << "(I32)";
     } else if (type.isInteger(64)) {
         ss << "(I64)";
-    } else if (type.isa<mlir::IntegerType>()) {
-        mlir::IntegerType intType = type.cast<mlir::IntegerType>();
+    } else if (isa<mlir::IntegerType>(type)) {
+        mlir::IntegerType intType = cast<mlir::IntegerType>(type);
         size_t width = intType.getWidth();
 
         if (intType.isSignless()) {
@@ -314,26 +314,26 @@ std::string Egglog::eggifyType(mlir::Type type) {
         }
     } else if (type.isIndex()) {
         ss << "(Index)";
-    } else if (type.isa<mlir::NoneType>()) {
+    } else if (isa<mlir::NoneType>(type)) {
         ss << "(None)";
-    } else if (type.isa<mlir::ComplexType>()) {
-        ss << "(Complex " << type.cast<mlir::ComplexType>().getElementType() << ")";
-    } else if (type.isa<mlir::TupleType>()) {
-        mlir::TupleType tupleType = type.cast<mlir::TupleType>();
+    } else if (isa<mlir::ComplexType>(type)) {
+        ss << "(Complex " << cast<mlir::ComplexType>(type).getElementType() << ")";
+    } else if (isa<mlir::TupleType>(type)) {
+        mlir::TupleType tupleType = cast<mlir::TupleType>(type);
         ss << "(TupleType (";
         for (mlir::Type element: tupleType.getTypes()) {
             ss << " " << eggifyType(element);
         }
         ss << "))";
-    } else if (type.isa<mlir::VectorType>()) {
-        mlir::VectorType vectorType = type.cast<mlir::VectorType>();
+    } else if (isa<mlir::VectorType>(type)) {
+        mlir::VectorType vectorType = cast<mlir::VectorType>(type);
         ss << "(Vector (vec-of";
         for (int64_t dim: vectorType.getShape()) {
             ss << " " << dim;
         }
         ss << ") " << eggifyType(vectorType.getElementType()) << ")";
-    } else if (type.isa<mlir::RankedTensorType>()) {
-        mlir::RankedTensorType tensorType = type.cast<mlir::RankedTensorType>();
+    } else if (isa<mlir::RankedTensorType>(type)) {
+        mlir::RankedTensorType tensorType = cast<mlir::RankedTensorType>(type);
         llvm::ArrayRef<int64_t> shape = tensorType.getShape();
         mlir::Type elementType = tensorType.getElementType();
 
@@ -342,8 +342,8 @@ std::string Egglog::eggifyType(mlir::Type type) {
             ss << " " << dim;
         }
         ss << ") " << eggifyType(elementType) << ")";
-    } else if (type.isa<mlir::UnrankedTensorType>()) {
-        mlir::UnrankedTensorType tensorType = type.cast<mlir::UnrankedTensorType>();
+    } else if (isa<mlir::UnrankedTensorType>(type)) {
+        mlir::UnrankedTensorType tensorType = cast<mlir::UnrankedTensorType>(type);
         mlir::Type elementType = tensorType.getElementType();
 
         ss << "(UnrankedTensor " << eggifyType(elementType) << ")";
@@ -357,8 +357,8 @@ std::string Egglog::eggifyType(mlir::Type type) {
             ss << " " << split[i];
         }
         ss << ")";
-    } else if (type.isa<mlir::FunctionType>()) {
-        mlir::FunctionType functionType = type.cast<mlir::FunctionType>();
+    } else if (isa<mlir::FunctionType>(type)) {
+        mlir::FunctionType functionType = cast<mlir::FunctionType>(type);
         llvm::ArrayRef<mlir::Type> inputTypes = functionType.getInputs();
         llvm::ArrayRef<mlir::Type> resultTypes = functionType.getResults();
 
@@ -446,7 +446,7 @@ mlir::Attribute Egglog::parseAttribute(const std::string& attrStr) {
             values.push_back(std::stoll(arraySplit[i]));
         }
         mlir::Type type = parseType(split[2]);
-        mlir::ShapedType shapedType = type.cast<mlir::ShapedType>();
+        mlir::ShapedType shapedType = cast<mlir::ShapedType>(type);
         return mlir::DenseIntElementsAttr::get(shapedType, values);
     } else if (attrType == "DenseFPElementsAttr") {  // (DenseFloatElementsAttr (vec-of <float1> <float2> ... <floatN>) <type>)
         std::vector<double> values;
@@ -455,7 +455,7 @@ mlir::Attribute Egglog::parseAttribute(const std::string& attrStr) {
             values.push_back(std::stod(arraySplit[i]));
         }
         mlir::Type type = parseType(split[2]);
-        mlir::ShapedType shapedType = type.cast<mlir::ShapedType>();
+        mlir::ShapedType shapedType = cast<mlir::ShapedType>(type);
         return mlir::DenseFPElementsAttr::get(shapedType, values);
     } else if (attrType == "SymbolRefAttr") {  // (SymbolRefAttr "<name>")
         return mlir::SymbolRefAttr::get(&context, unwrap(split[1], '"'));
@@ -477,22 +477,22 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
     mlir::TypeID typeId = attr.getTypeID();
     std::string typeName = attr.getAbstractAttribute().getName().str();
     if (typeId == mlir::TypeID::get<mlir::IntegerAttr>()) {  // (IntegerAttr <int> <type>)
-        mlir::IntegerAttr integerAttr = attr.cast<mlir::IntegerAttr>();
+        mlir::IntegerAttr integerAttr = cast<mlir::IntegerAttr>(attr);
         int64_t value = integerAttr.getInt();
         ss << "(IntegerAttr " << value << " " << eggifyType(integerAttr.getType()) << ")";
 
     } else if (typeId == mlir::TypeID::get<mlir::FloatAttr>()) {  // (FloatAttr <float> <type>)
-        mlir::FloatAttr floatAttr = attr.cast<mlir::FloatAttr>();
+        mlir::FloatAttr floatAttr = cast<mlir::FloatAttr>(attr);
         double value = floatAttr.getValueAsDouble();
         ss << "(FloatAttr " << doubleToString(value) << " " << eggifyType(floatAttr.getType()) << ")";
 
     } else if (typeId == mlir::TypeID::get<mlir::StringAttr>()) {  // (StringAttr "<string>">)
-        mlir::StringAttr stringAttr = attr.cast<mlir::StringAttr>();
+        mlir::StringAttr stringAttr = cast<mlir::StringAttr>(attr);
         std::string value = stringAttr.getValue().str();
         ss << "(StringAttr \"" << value << "\")";
 
     } else if (typeId == mlir::TypeID::get<mlir::ArrayAttr>()) {  // (ArrayAttr (vec-of <attr1> <attr2> ... <attrN>))
-        mlir::ArrayAttr arrayAttr = attr.cast<mlir::ArrayAttr>();
+        mlir::ArrayAttr arrayAttr = cast<mlir::ArrayAttr>(attr);
         ss << "(ArrayAttr (";
 
         if (arrayAttr.empty()) {
@@ -506,7 +506,7 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         ss << "))";
 
     } else if (typeId == mlir::TypeID::get<mlir::TypeAttr>()) {  // (TypeAttr "<type>")
-        mlir::TypeAttr typeAttr = attr.cast<mlir::TypeAttr>();
+        mlir::TypeAttr typeAttr = cast<mlir::TypeAttr>(attr);
         mlir::Type type = typeAttr.getValue();
         ss << "(TypeAttr " << eggifyType(type) << ")";
 
@@ -514,7 +514,7 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         ss << "(UnitAttr)";
 
     } else if (typeId == mlir::TypeID::get<mlir::DenseArrayAttr>()) {
-        mlir::DenseArrayAttr denseArrayAttr = attr.cast<mlir::DenseArrayAttr>();
+        mlir::DenseArrayAttr denseArrayAttr = cast<mlir::DenseArrayAttr>(attr);
         llvm::ArrayRef<char> rawData = denseArrayAttr.getRawData();
         mlir::Type elementType = denseArrayAttr.getElementType();
         size_t size = denseArrayAttr.size();
@@ -522,14 +522,14 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         // if Int type, then it is a DenseIntArrayAttr
         // if Float type, then it is a DenseFloatArrayAttr
 
-        if (elementType.isa<mlir::IntegerType>()) {
+        if (isa<mlir::IntegerType>(elementType)) {
             llvm::ArrayRef<int64_t> values(reinterpret_cast<const int64_t*>(rawData.data()), size);
             ss << "(DenseIntArrayAttr " << size << " (vec-of";
             for (int64_t value: values) {
                 ss << " " << value;
             }
             ss << ") " << eggifyType(elementType) << ")";
-        } else if (elementType.isa<mlir::FloatType>()) {
+        } else if (isa<mlir::FloatType>(elementType)) {
             llvm::ArrayRef<double> values(reinterpret_cast<const double*>(rawData.data()), size);
             ss << "(DenseFloatArrayAttr " << size << " (vec-of";
             for (double value: values) {
@@ -539,18 +539,18 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         }
 
     } else if (typeId == mlir::TypeID::get<mlir::DenseIntOrFPElementsAttr>()) {
-        mlir::DenseIntOrFPElementsAttr denseIntOrFPAttr = attr.cast<mlir::DenseIntOrFPElementsAttr>();
+        mlir::DenseIntOrFPElementsAttr denseIntOrFPAttr = cast<mlir::DenseIntOrFPElementsAttr>(attr);
         mlir::Type elementType = denseIntOrFPAttr.getElementType();
         mlir::ShapedType shapedType = denseIntOrFPAttr.getType();
 
-        if (elementType.isa<mlir::IntegerType>()) {
+        if (isa<mlir::IntegerType>(elementType)) {
             auto values = denseIntOrFPAttr.getValues<int64_t>();  // TODO this assumes always 8 bytes per int (WRONG)
             ss << "(DenseIntElementsAttr (vec-of";
             for (int64_t value: values) {
                 ss << " " << value;
             }
             ss << ") " << eggifyType(shapedType) << ")";
-        } else if (elementType.isa<mlir::FloatType>()) {
+        } else if (isa<mlir::FloatType>(elementType)) {
             auto values = denseIntOrFPAttr.getValues<double>();  // TODO this assumes always 8 bytes per double (WRONG)
             ss << "(DenseFPElementsAttr (vec-of";
             for (double value: values) {
@@ -560,7 +560,7 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         }
 
     } else if (typeId == mlir::TypeID::get<mlir::SymbolRefAttr>()) {  // (SymbolRefAttr "<name>")
-        mlir::SymbolRefAttr symbolRefAttr = attr.cast<mlir::SymbolRefAttr>();
+        mlir::SymbolRefAttr symbolRefAttr = cast<mlir::SymbolRefAttr>(attr);
         std::string value = symbolRefAttr.getRootReference().str();
         ss << "(SymbolRefAttr \"" << value << "\")";
 
@@ -620,16 +620,16 @@ mlir::Operation* Egglog::parseOperation(const std::string& newOpStr, mlir::OpBui
     std::vector<std::string> split = splitExpression(newOpStr);
     std::string opName = split[0];
 
-    if (opName == "Value") { // If it's am opaque op, no operation to parse
+    if (opName == "Value") {  // If it's am opaque op, no operation to parse
         return nullptr;
     }
 
-    bool cacheable = opName.find("func_call") == std::string::npos; // TODO hacky way to check if cacheable, fix this
-    if (parsedOps.find(newOpStr) != parsedOps.end() && cacheable) { // look in the parsed ops cache
+    bool cacheable = opName.find("func_call") == std::string::npos;  // TODO hacky way to check if cacheable, fix this
+    if (parsedOps.find(newOpStr) != parsedOps.end() && cacheable) {  // look in the parsed ops cache
         return parsedOps[newOpStr];
     }
 
-    if (supportedEgglogOps.find(opName) == supportedEgglogOps.end()) { // unsupported operation
+    if (supportedEgglogOps.find(opName) == supportedEgglogOps.end()) {  // unsupported operation
         llvm::outs() << "Unsupported operation '" << opName << "'.\n";
         exit(1);
     }
@@ -643,7 +643,7 @@ mlir::Operation* Egglog::parseOperation(const std::string& newOpStr, mlir::OpBui
     // Operands
     std::vector<mlir::Value> operands;
     for (size_t i = 0; i < egglogOpDef.nOperands; i++, index++) {
-        std::string operandStr = split[index + 1]; // get the operand string
+        std::string operandStr = split[index + 1];  // get the operand string
 
         if (operandStr.find("(Value ") == 0) {
             mlir::Value operand = parseValue(operandStr);
@@ -675,7 +675,7 @@ mlir::Operation* Egglog::parseOperation(const std::string& newOpStr, mlir::OpBui
         mlir::Type type = parseType(split[index + 1]);
         types.push_back(type);
     }
-    
+
     // Create the operation
     mlir::Operation* newOp = nullptr;
 
@@ -683,7 +683,7 @@ mlir::Operation* Egglog::parseOperation(const std::string& newOpStr, mlir::OpBui
         std::string op = mlirOpName.substr(7);
         if (op == "transpose") {
             mlir::Attribute attr = attributes[0].getValue();
-            newOp = builder.create<mlir::linalg::TransposeOp>(mlir::UnknownLoc::get(&context), operands[0], operands[1], attr.cast<mlir::DenseI64ArrayAttr>());
+            newOp = builder.create<mlir::linalg::TransposeOp>(mlir::UnknownLoc::get(&context), operands[0], operands[1], cast<mlir::DenseI64ArrayAttr>(attr));
         } else if (op == "matmul") {
             newOp = builder.create<mlir::linalg::MatmulOp>(mlir::UnknownLoc::get(&context), operands[2].getType(), llvm::ArrayRef<mlir::Value> {operands[0], operands[1]}, operands[2]);
         }
@@ -760,7 +760,7 @@ EggifiedOp* Egglog::eggifyValue(mlir::Value value) {
 
 EggifiedOp* Egglog::eggifyOpaqueOperation(mlir::Operation* op) {
     if (op->getNumResults() == 1) {
-        return eggifyValue(op->getResult(0)); // backwards compatibility
+        return eggifyValue(op->getResult(0));  // backwards compatibility
     }
 
     size_t id = nextId();
@@ -784,7 +784,7 @@ EggifiedOp* Egglog::eggifyOperation(mlir::Operation* op) {
 
     if (!isSupported) {
         // check is supported if we add the number of operands
-        // TODO change to lookup in the map for the appropriate operation name 
+        // TODO change to lookup in the map for the appropriate operation name
         std::string opNameWithNumOperands = opName + "." + std::to_string(op->getNumOperands());
         isSupported = supportedEgglogOps.find(opNameWithNumOperands) != supportedEgglogOps.end();
 
@@ -810,7 +810,7 @@ EggifiedOp* Egglog::eggifyOperation(mlir::Operation* op) {
         return eggifyOpaqueOperation(op);
     }
 
-    op->removeAttr("linalg.memoized_indexing_maps"); // temporary fix for linalg ops
+    op->removeAttr("linalg.memoized_indexing_maps");  // temporary fix for linalg ops
 
     std::stringstream ss;
 

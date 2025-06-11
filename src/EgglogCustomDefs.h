@@ -39,7 +39,7 @@ std::vector<std::string> stringifyFastMathFlagsAttr(mlir::Attribute attr, Egglog
 
     split.push_back("arith_fastmath");
 
-    mlir::arith::FastMathFlagsAttr fastMathAttr = attr.cast<mlir::arith::FastMathFlagsAttr>();
+    mlir::arith::FastMathFlagsAttr fastMathAttr = cast<mlir::arith::FastMathFlagsAttr>(attr);
     mlir::arith::FastMathFlags flags = fastMathAttr.getValue();
 
     split.push_back("(" + mlir::arith::stringifyFastMathFlags(flags) + ")");
@@ -78,7 +78,7 @@ std::vector<std::string> stringifyRankedTensorType(mlir::Type type, Egglog& eggl
     std::vector<std::string> split;
     split.push_back("RankedTensor");
 
-    mlir::RankedTensorType tensorType = type.cast<mlir::RankedTensorType>();
+    mlir::RankedTensorType tensorType = cast<mlir::RankedTensorType>(type);
     llvm::ArrayRef<int64_t> shape = tensorType.getShape();
     mlir::Type elementType = tensorType.getElementType();
 
