@@ -247,13 +247,13 @@ func.func @displayTime(%start: i64, %end: i64) {
     func.return
 }
 
-func.func @main() -> i32 {
-    %start = func.call @clock() : () -> i64  // Start measuring time
-    // some code
-    %end = func.call @clock() : () -> i64  // End measuring time
-    func.call @displayTime(%start, %end) : (i64, i64) -> ()  // Display elapsed time
-    func.call @printNewline() : () -> ()  // Print a newline at the end
+// func.func @main() -> i32 {
+//     %start = func.call @clock() : () -> i64  // Start measuring time
+//     // some code
+//     %end = func.call @clock() : () -> i64  // End measuring time
+//     func.call @displayTime(%start, %end) : (i64, i64) -> ()  // Display elapsed time
+//     func.call @printNewline() : () -> ()  // Print a newline at the end
     
-    %c0 = arith.constant 0 : i32
-    func.return %c0 : i32
-}
+//     %c0 = arith.constant 0 : i32
+//     func.return %c0 : i32
+// }

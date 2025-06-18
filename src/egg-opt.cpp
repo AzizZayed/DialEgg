@@ -6,6 +6,11 @@
 #include "mlir/AsmParser/AsmParser.h"
 
 #include "stablehlo/dialect/Register.h"
+#include "stablehlo/conversions/linalg/transforms/Passes.h"
+#include "stablehlo/tests/CheckOps.h"
+#include "stablehlo/tests/TestUtils.h"
+#include "stablehlo/transforms/Passes.h"
+#include "stablehlo/transforms/optimization/Passes.h"
 
 #include "Egglog.h"
 #include "EqualitySaturationPass.h"
@@ -31,6 +36,10 @@ int main(int argc, char** argv) {
 
     // Register passes
     mlir::registerAllPasses();
+    mlir::stablehlo::registerPassPipelines();
+    mlir::stablehlo::registerPasses();
+    mlir::stablehlo::registerOptimizationPasses();
+    mlir::stablehlo::registerStablehloLinalgTransformsPasses();
     mlir::PassRegistration<EggifyPass>();
 
     std::map<std::string, AttrStringifyFunction> attrStringifiers = {

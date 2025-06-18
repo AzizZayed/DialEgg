@@ -10,7 +10,8 @@ MLIR_FILENAME=$(basename $MLIR_FILE .mlir) # name without path or extension
 echo "Executing $MLIR_FILE"
 
 MLIR_LL_FILE="$MLIR_FILEPATH/$MLIR_FILENAME.ll.mlir"
-mlir-opt --convert-elementwise-to-linalg \
+./build/egg-opt --stablehlo-legalize-to-linalg \
+         --convert-elementwise-to-linalg \
          --convert-tensor-to-linalg \
          --convert-linalg-to-loops \
          --one-shot-bufferize=bufferize-function-boundaries=true \
@@ -35,6 +36,6 @@ llc -filetype=obj -O3 "$LL_FILE" -o "$O_FILE"
 
 EXEC_FILE="$MLIR_FILEPATH/$MLIR_FILENAME.exec"
 clang -O3 "$O_FILE" -o "$EXEC_FILE" \
-    -L/Users/aziz/dev/lib/llvm/build-debug/lib -lmlir_c_runner_utils -L/Users/aziz/dev/current/dialegg/test -lutil -Wl,-rpath,/Users/aziz/dev/lib/llvm/build-debug/lib -Wl,-rpath,/Users/aziz/dev/current/dialegg/test
-
+    -L/Users/aziz/dev/lib/llvm/build-debug/lib -lmlir_c_runner_utils -L/Users/aziz/dev/current/dialegg/test/util -lutil -Wl,-rpath,/Users/aziz/dev/lib/llvm/build-debug/lib -Wl,-rpath,/Users/aziz/dev/current/dialegg/test/util
+# TODO remove hardcoded paths
 "$EXEC_FILE"
