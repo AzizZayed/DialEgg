@@ -3,7 +3,6 @@ project(egg-opt LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 
-set(CMAKE_BUILD_TYPE Debug)  # Set -DCMAKE_BUILD_TYPE to "Release" to build with optimizations
 find_package(LLVM REQUIRED CONFIG)
 if ("${LLVM_VERSION_MAJOR}" VERSION_LESS 18)
     message(FATAL_ERROR "Found LLVM ${LLVM_VERSION_MAJOR}, but need LLVM 18 or above")
@@ -52,5 +51,9 @@ set(OPT_LIBS ${dialect_libs} ${conversion_libs} MLIROptLib)
 add_llvm_executable(egg-opt src/egg-opt.cpp src/EqualitySaturationPass.cpp src/Egglog.cpp)
 llvm_update_compile_flags(egg-opt)
 target_link_libraries(egg-opt PRIVATE ${OPT_LIBS})
+
+add_llvm_executable(playground src/playground.cpp)
+llvm_update_compile_flags(playground)
+target_link_libraries(playground PRIVATE ${OPT_LIBS})
 
 add_subdirectory(test)
