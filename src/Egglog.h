@@ -148,10 +148,7 @@ public:
      * Example: "(linalg_add (linalg_abs (tensor_empty)) (tensor_empty))" -> ["linalg_add", "(linalg_abs (tensor_empty))", "(tensor_empty)"]
      */
     static std::vector<std::string> splitExpression(std::string opStr);
-
-    static std::string dialectFromName(std::string op);
-    static std::string opNameFromName(std::string op);
-    static std::string numOperandsFromName(std::string op);
+    
     static std::string removeComment(const std::string& str);
 
     Egglog(mlir::MLIRContext& context, const EgglogCustomDefs& egglogCustom, const std::map<std::string, EgglogOpDef>& supportedEgglogOps)

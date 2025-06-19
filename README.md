@@ -113,3 +113,7 @@ func.func @classic(%arg0: i32) -> i32 {
     return %arg0 : i32
 }
 ```
+
+## Future Improvements
+- Better support for ops with variadic number of operands and attributes
+- Better support for ops with optional operands and attributes

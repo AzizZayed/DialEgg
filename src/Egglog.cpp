@@ -32,10 +32,22 @@ EgglogOpDef EgglogOpDef::parseOpFunction(const std::string& opStr) {
         assert(split.back() == "Op");
     }
 
-    std::string fullName = split[1];
-    std::string name = Egglog::opNameFromName(fullName);
-    std::string dialect = Egglog::dialectFromName(fullName);
-    std::string version = Egglog::numOperandsFromName(fullName);
+    std::string fullName = split[1]; // dialect_name_name_name_version or dialect_name_name_name
+    
+    size_t firstUnderscore = fullName.find_first_of('_');
+    std::string dialect = fullName.substr(0, firstUnderscore);
+
+    std::string version = "";
+    std::string name = fullName.substr(firstUnderscore + 1);
+    if (isdigit(fullName.back())) {
+        size_t lastUnderscore = fullName.find_last_of('_');
+        version = fullName.substr(lastUnderscore + 1);
+        name = fullName.substr(firstUnderscore + 1, lastUnderscore - firstUnderscore - 1);
+    }
+
+    LLVM_DEBUG(llvm::dbgs() << "Parsing EgglogOpDef: " << newOpStr << "\n"
+                << "Full Name: " << fullName << "\n"
+                << "Dialect: " << dialect << ", Name: " << name << ", Version: " << version << "\n");
 
     std::vector<std::string> args = Egglog::splitExpression(split[2]);
 
@@ -130,42 +142,6 @@ std::vector<std::string> Egglog::splitExpression(std::string opStr) {  // linear
     }
 
     return result;
-}
-
-std::string Egglog::dialectFromName(std::string op) {
-    // remove the leading "func." or "func_"
-    bool isDot = op.find_first_of('.') != std::string::npos;
-    bool isUnderscore = op.find_first_of('_') != std::string::npos;
-
-    if (isDot) {
-        return op.substr(0, op.find_first_of('.'));
-    } else if (isUnderscore) {
-        return op.substr(0, op.find_first_of('_'));
-    } else {
-        return "";
-    }
-}
-
-std::string Egglog::opNameFromName(std::string op) {
-    bool isDot = op.find_first_of('.') != std::string::npos;
-
-    // split by the dot or underscore
-    llvm::StringRef opRef(op);
-    std::pair<llvm::StringRef, llvm::StringRef> split = opRef.split(isDot ? '.' : '_');          // "func" and "call_0"
-    std::pair<llvm::StringRef, llvm::StringRef> split2 = split.second.split(isDot ? '.' : '_');  // "call" and "0"
-
-    return split2.first.str();
-}
-
-std::string Egglog::numOperandsFromName(std::string op) {
-    // get last number in the string "func.name.0" or "func_name_0"
-    bool isDot = op.find_first_of('.') != std::string::npos;
-
-    llvm::StringRef opRef(op);
-    std::pair<llvm::StringRef, llvm::StringRef> split = opRef.split(isDot ? '.' : '_');
-    std::pair<llvm::StringRef, llvm::StringRef> split2 = split.second.split(isDot ? '.' : '_');
-
-    return split2.second.str();
 }
 
 /** Parses the given type string into an MLIR type Form (F16) or (Complex <type>) */
