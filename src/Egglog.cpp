@@ -10,6 +10,7 @@
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Linalg/IR/LinalgInterfaces.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
+#include "stablehlo/dialect/StablehloOps.h"
 
 #include "Egglog.h"
 #include "EqualitySaturationPass.h"
@@ -33,7 +34,7 @@ EgglogOpDef EgglogOpDef::parseOpFunction(const std::string& opStr) {
     }
 
     std::string fullName = split[1]; // dialect_name_name_name_version or dialect_name_name_name
-    
+
     size_t firstUnderscore = fullName.find_first_of('_');
     std::string dialect = fullName.substr(0, firstUnderscore);
 
@@ -103,7 +104,7 @@ std::string Egglog::removeComment(const std::string& str) {
     return str;
 }
 
-std::vector<std::string> Egglog::splitExpression(std::string opStr) {  // linear
+std::vector<std::string> Egglog::splitExpression(std::string opStr) {
     // The expression must be surrounded by parentheses
     if (opStr.front() != '(' || opStr.back() != ')') {
         llvm::outs() << "Invalid expression: " << opStr << "\n";
@@ -159,6 +160,8 @@ mlir::Type Egglog::parseType(std::string typeStr) {
         return mlir::Float80Type::get(&context);
     } else if (type == "F128") {
         return mlir::Float128Type::get(&context);
+    } else if (type == "TF32") {
+        return mlir::FloatTF32Type::get(&context);
     } else if (type == "I1") {
         return mlir::IntegerType::get(&context, 1);
     } else if (type == "I8") {
@@ -266,6 +269,8 @@ std::string Egglog::eggifyType(mlir::Type type) {
         ss << "(F80)";
     } else if (type.isF128()) {
         ss << "(F128)";
+    } else if (type.isTF32()) {
+        ss << "(TF32)";
     } else if (type.isInteger(1)) {
         ss << "(I1)";
     } else if (type.isInteger(4)) {
@@ -438,6 +443,45 @@ mlir::Attribute Egglog::parseAttribute(const std::string& attrStr) {
         return mlir::DenseFPElementsAttr::get(shapedType, values);
     } else if (attrType == "SymbolRefAttr") {  // (SymbolRefAttr "<name>")
         return mlir::SymbolRefAttr::get(&context, unwrap(split[1], '"'));
+    } else if (attrType == "PrecisionAttr") {  // (PrecisionAttr (DEFAULT | HIGH | HIGHEST))
+        std::string precisionStr = unwrap(split[1], '"');
+        mlir::stablehlo::Precision precision = mlir::stablehlo::symbolizePrecision(precisionStr).value_or(mlir::stablehlo::Precision::DEFAULT);
+        return mlir::stablehlo::PrecisionAttr::get(&context, precision);
+    } else if (attrType == "DotAlgorithmAttr") {  // (DotAlgorithmAttr <type1> <type2> <type3> <int1> <int2> <int3> <bool>)
+        mlir::Type type1 = parseType(split[1]);
+        mlir::Type type2 = parseType(split[2]);
+        mlir::Type type3 = parseType(split[3]);
+        int64_t int1 = std::stoll(split[4]);
+        int64_t int2 = std::stoll(split[5]);
+        int64_t int3 = std::stoll(split[6]);
+        return mlir::stablehlo::DotAlgorithmAttr::get(&context, type1, type2, type3, int1, int2, int3, split[7] == "true");
+    } else if (attrType == "DotDimensionNumbersAttr") { // (DotDimensionNumbersAttr <intvec> <intvec> <intvec> <intvec>)
+        std::vector<int64_t> lhsBatchingDimensions;
+        std::vector<int64_t> rhsBatchingDimensions;
+        std::vector<int64_t> lhsContractingDimensions;
+        std::vector<int64_t> rhsContractingDimensions;
+
+        std::vector<std::string> lhsBatchingSplit = splitExpression(split[1]);
+        for (size_t i = 1; i < lhsBatchingSplit.size(); i++) {
+            lhsBatchingDimensions.push_back(std::stoll(lhsBatchingSplit[i]));
+        }
+
+        std::vector<std::string> rhsBatchingSplit = splitExpression(split[2]);
+        for (size_t i = 1; i < rhsBatchingSplit.size(); i++) {
+            rhsBatchingDimensions.push_back(std::stoll(rhsBatchingSplit[i]));
+        }
+
+        std::vector<std::string> lhsContractingSplit = splitExpression(split[3]);
+        for (size_t i = 1; i < lhsContractingSplit.size(); i++) {
+            lhsContractingDimensions.push_back(std::stoll(lhsContractingSplit[i]));
+        }
+
+        std::vector<std::string> rhsContractingSplit = splitExpression(split[4]);
+        for (size_t i = 1; i < rhsContractingSplit.size(); i++) {
+            rhsContractingDimensions.push_back(std::stoll(rhsContractingSplit[i]));
+        }
+
+        return mlir::stablehlo::DotDimensionNumbersAttr::get(&context, lhsBatchingDimensions, rhsBatchingDimensions, lhsContractingDimensions, rhsContractingDimensions);
     } else if (attrType == "OpaqueAttr") {  // TODO add all remaining builtin attrs (check below functions)
         return mlir::parseAttribute(unwrap(split[1], '"'), &context);
     } else if (egglogCustom.attrParsers.find(attrType) != egglogCustom.attrParsers.end()) {
@@ -542,6 +586,38 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         mlir::SymbolRefAttr symbolRefAttr = cast<mlir::SymbolRefAttr>(attr);
         std::string value = symbolRefAttr.getRootReference().str();
         ss << "(SymbolRefAttr \"" << value << "\")";
+    } else if (typeId == mlir::TypeID::get<mlir::stablehlo::PrecisionAttr>()) {  // (PrecisionAttr <type>)
+        mlir::stablehlo::PrecisionAttr precisionAttr = cast<mlir::stablehlo::PrecisionAttr>(attr);
+        ss << "(PrecisionAttr (" << mlir::stablehlo::stringifyPrecision(precisionAttr.getValue()) << "))";
+    } else if (typeId == mlir::TypeID::get<mlir::stablehlo::DotAlgorithmAttr>()) {
+        mlir::stablehlo::DotAlgorithmAttr dotAlgorithmAttr = cast<mlir::stablehlo::DotAlgorithmAttr>(attr);
+        ss << "(DotAlgorithmAttr ";
+        ss << eggifyType(dotAlgorithmAttr.getLhsPrecisionType()) << " ";
+        ss << eggifyType(dotAlgorithmAttr.getRhsPrecisionType()) << " ";
+        ss << eggifyType(dotAlgorithmAttr.getAccumulationType()) << " ";
+        ss << dotAlgorithmAttr.getLhsComponentCount() << " ";
+        ss << dotAlgorithmAttr.getRhsComponentCount() << " ";
+        ss << dotAlgorithmAttr.getNumPrimitiveOperations() << " ";
+        ss << (dotAlgorithmAttr.getAllowImpreciseAccumulation() ? "true" : "false") << ")";
+    } else if (typeId == mlir::TypeID::get<mlir::stablehlo::DotDimensionNumbersAttr>()) {
+        mlir::stablehlo::DotDimensionNumbersAttr dotDimAttr = cast<mlir::stablehlo::DotDimensionNumbersAttr>(attr);
+        ss << "(DotDimensionNumbersAttr (vec-of";
+        for (int64_t dim: dotDimAttr.getLhsBatchingDimensions()) {
+            ss << " " << dim;
+        }
+        ss << ") (vec-of";
+        for (int64_t dim: dotDimAttr.getRhsBatchingDimensions()) {
+            ss << " " << dim;
+        }
+        ss << ") (vec-of";
+        for (int64_t dim: dotDimAttr.getLhsContractingDimensions()) {
+            ss << " " << dim;
+        }
+        ss << ") (vec-of";
+        for (int64_t dim: dotDimAttr.getRhsContractingDimensions()) {
+            ss << " " << dim;
+        }
+        ss << "))";
 
     } else if (egglogCustom.attrStringifiers.find(typeName) != egglogCustom.attrStringifiers.end()) {  // custom attr by user
         AttrStringifyFunction stringifyFunc = egglogCustom.attrStringifiers.at(typeName);
@@ -613,7 +689,7 @@ mlir::Operation* Egglog::parseOperation(const std::string& newOpStr, mlir::OpBui
         exit(1);
     }
 
-    std::replace(opName.begin(), opName.end(), '_', '.');  // Replace underscores with dots
+    opName[opName.find_first_of('_')] = '.';  // Replace first underscore with dot
     EgglogOpDef egglogOpDef = supportedEgglogOps.at(opName);
     std::string mlirOpName = egglogOpDef.dialect + "." + egglogOpDef.name;
 

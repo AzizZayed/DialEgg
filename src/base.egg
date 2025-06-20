@@ -38,6 +38,7 @@
 (function F64 () Type)
 (function F80 () Type)
 (function F128 () Type)
+(function TF32 () Type)
 (function I1 () Type)
 (function I4 () Type)
 (function I8 () Type)

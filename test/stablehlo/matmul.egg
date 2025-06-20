@@ -1,0 +1,55 @@
+(include "../../../src/base.egg") ; The tests are run from "build/test/stablehlo"
+
+;;;; StableHLO Dialect ;;;;
+
+;; Types
+(datatype Precision (DEFAULT) (HIGH) (HIGHEST))
+
+;; Attrs
+(function PrecisionAttr (Precision) Attr)
+(function DotDimensionNumbersAttr (IntVec IntVec IntVec IntVec) Attr)
+(function DotAlgorithmAttr (Type Type Type i64 i64 i64 bool) Attr)
+
+;; Ops
+(function stablehlo_dot_general (Op Op AttrPair AttrPair AttrPair Type) Op)
+
+;; OPS HERE ;;
+
+;; RULES HERE ;;
+(ruleset rules)
+
+(rule ((= ?A (Value ?id ?t))) ((set (type-of ?A) ?t)) :ruleset rules)
+(rule ((= ?A (stablehlo_dot_general ?x ?y ?a1 ?a2 ?a3 ?t))) ((set (type-of ?A) ?t)) :ruleset rules)
+
+(function nrows (Type) i64)
+(function ncols (Type) i64)
+(rule ((= ?t (RankedTensor ?shape ?tp))) 
+    ((set (nrows ?t) (vec-get ?shape 0)) 
+     (set (ncols ?t) (vec-get ?shape 1)))
+    :ruleset rules
+)
+
+(rule 
+    ((stablehlo_dot_general ?x ?y ?a1 ?a2 ?a3 ?t)
+     (= a (nrows (type-of ?x)))
+     (= b (ncols (type-of ?x)))
+     (= c (ncols (type-of ?y))))
+
+    ((unstable-cost (stablehlo_dot_general ?x ?y ?a1 ?a2 ?a3 ?t) (* (* a b) c)))
+    :ruleset rules
+)
+
+(rule
+    ((= ?lhs (stablehlo_dot_general (stablehlo_dot_general ?x ?y ?a1 ?a2 ?a3 ?xy_t) ?z ?a1 ?a2 ?a3 ?xyz_t))
+     (= ?b (nrows (type-of ?y)))
+     (= ?d (ncols (type-of ?z)))
+     (= ?xyz_t (RankedTensor ? ?t)))
+    
+    ((let yz_t (RankedTensor (vec-of ?b ?d) ?t))
+     (union ?lhs (stablehlo_dot_general ?x (stablehlo_dot_general ?y ?z ?a1 ?a2 ?a3 yz_t) ?a1 ?a2 ?a3 ?xyz_t)))
+    :ruleset rules
+)
+
+(run-schedule (saturate rules))
+
+;; EXTRACTS HERE ;;

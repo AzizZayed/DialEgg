@@ -41,7 +41,8 @@ int main() {
     outs() << "DotDimensionNumbersAttr: " << dotDimAttr << "\n";
 
     // static PrecisionAttr get(::mlir::MLIRContext *context, ::mlir::stablehlo::Precision value);
-    
+    stablehlo::PrecisionAttr precisionAttr = stablehlo::PrecisionAttr::get(&context, stablehlo::Precision::DEFAULT);
+    outs() << "PrecisionAttr: " << precisionAttr << "\n";
     
     return 0;
 }

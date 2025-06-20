@@ -29,7 +29,7 @@ struct EggifyPass : public mlir::PassWrapper<EggifyPass, mlir::OperationPass<mli
 
             // Print the operation name and the number of operands, results, and attributes
             // (function <opName> (i64 [Op]*numOperands [AttrPair]*numAttributes Type) Op)
-            llvm::outs() << "(function " << opNameStr << " (i64";  // (function <opName> i64)
+            llvm::outs() << "(function " << opNameStr << " (";  // (function <opName> (
             for (size_t i = 0; i < numOperands; i++) {
                 llvm::outs() << " Op";
             }

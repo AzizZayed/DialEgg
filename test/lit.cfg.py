@@ -53,6 +53,7 @@ config.excludes = [
     "scf",
     "util",
     "vector_norm",
+    "playground.mlir"
 ]
 
 # test_exec_root: The root path where tests should be run.
