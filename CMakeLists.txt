@@ -52,8 +52,4 @@ add_llvm_executable(egg-opt src/egg-opt.cpp src/EqualitySaturationPass.cpp src/E
 llvm_update_compile_flags(egg-opt)
 target_link_libraries(egg-opt PRIVATE ${OPT_LIBS})
 
-add_llvm_executable(playground src/playground.cpp)
-llvm_update_compile_flags(playground)
-target_link_libraries(playground PRIVATE ${OPT_LIBS})
-
 add_subdirectory(test)
