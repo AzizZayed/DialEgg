@@ -566,20 +566,37 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         mlir::Type elementType = denseIntOrFPAttr.getElementType();
         mlir::ShapedType shapedType = denseIntOrFPAttr.getType();
 
-        if (isa<mlir::IntegerType>(elementType)) {
-            auto values = denseIntOrFPAttr.getValues<int64_t>();  // TODO this assumes always 8 bytes per int (WRONG)
+        if (elementType.isInteger(64)) {
+            auto values = denseIntOrFPAttr.getValues<int64_t>();
             ss << "(DenseIntElementsAttr (vec-of";
             for (int64_t value: values) {
                 ss << " " << value;
             }
             ss << ") " << eggifyType(shapedType) << ")";
-        } else if (isa<mlir::FloatType>(elementType)) {
-            auto values = denseIntOrFPAttr.getValues<double>();  // TODO this assumes always 8 bytes per double (WRONG)
+        } else if (elementType.isInteger(32)) {
+            auto values = denseIntOrFPAttr.getValues<int32_t>();
+            ss << "(DenseIntElementsAttr (vec-of";
+            for (int32_t value: values) {
+                ss << " " << value;
+            }
+            ss << ") " << eggifyType(shapedType) << ")";
+        } else if (elementType.isF64()) {
+            auto values = denseIntOrFPAttr.getValues<double>();
             ss << "(DenseFPElementsAttr (vec-of";
             for (double value: values) {
                 ss << " " << value;
             }
             ss << ") " << eggifyType(shapedType) << ")";
+        } else if (elementType.isF32()) {
+            auto values = denseIntOrFPAttr.getValues<float>();
+            ss << "(DenseFPElementsAttr (vec-of";
+            for (float value: values) {
+                ss << " " << value;
+            }
+            ss << ") " << eggifyType(shapedType) << ")";
+        } else {
+            llvm::outs() << "Unsupported DenseIntOrFPElementsAttr type: " << elementType << "\n";
+            exit(1);
         }
 
     } else if (typeId == mlir::TypeID::get<mlir::SymbolRefAttr>()) {  // (SymbolRefAttr "<name>")
