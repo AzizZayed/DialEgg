@@ -12,7 +12,7 @@
 #include "Egglog.h"
 #include "Utils.h"
 
-struct EqualitySaturationPass : public mlir::PassWrapper<EqualitySaturationPass, mlir::OperationPass<mlir::func::FuncOp>> {
+struct EqualitySaturationPass : public mlir::PassWrapper<EqualitySaturationPass, mlir::OperationPass<mlir::ModuleOp>> {
     std::string mlirFilePath;
     std::string eggFilePath;
 
@@ -33,10 +33,11 @@ struct EqualitySaturationPass : public mlir::PassWrapper<EqualitySaturationPass,
     mlir::StringRef getArgument() const override { return "eq-sat"; }
     mlir::StringRef getDescription() const override { return "Performs equality saturation on each block in the given file. The language definition is egglog."; }
 
-    void init();
+    llvm::LogicalResult initialize(mlir::MLIRContext*) override;
     void runOnOperation() override;
-    void runOnBlock(mlir::Block& block, const std::string& blockName);
-    void runEgglog(const std::vector<EggifiedOp*>& block, const std::string& blockName);
+    void runOnFunction(mlir::func::FuncOp&);
+    void runOnBlock(mlir::Block&, const std::string&);
+    void runEgglog(const std::vector<EggifiedOp*>&, const std::string&);
 };
 
 #endif  // EQUALITYSATURATIONPASS_H
