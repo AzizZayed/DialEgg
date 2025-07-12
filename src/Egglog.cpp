@@ -445,8 +445,16 @@ mlir::Attribute Egglog::parseAttribute(const std::string& attrStr) {
         return mlir::SymbolRefAttr::get(&context, unwrap(split[1], '"'));
     } else if (attrType == "PrecisionAttr") {  // (PrecisionAttr (DEFAULT | HIGH | HIGHEST))
         std::string precisionStr = unwrap(split[1], '"');
-        mlir::stablehlo::Precision precision = mlir::stablehlo::symbolizePrecision(precisionStr).value_or(mlir::stablehlo::Precision::DEFAULT);
+        mlir::stablehlo::Precision precision = mlir::stablehlo::symbolizePrecision(precisionStr).value();
         return mlir::stablehlo::PrecisionAttr::get(&context, precision);
+    } else if (attrType == "ComparisonDirectionAttr") {  // (ComparisonDirectionAttr (EQ | NE | LT | LE | GT | GE))
+        std::string directionStr = unwrap(split[1], '"');
+        mlir::stablehlo::ComparisonDirection direction = mlir::stablehlo::symbolizeComparisonDirection(directionStr).value();
+        return mlir::stablehlo::ComparisonDirectionAttr::get(&context, direction);
+    } else if (attrType == "ComparisonTypeAttr") { // (ComparisonTypeAttr (NOTYPE | FLOAT | TOTALORDER | SIGNED | UNSIGNED))
+        std::string typeStr = unwrap(split[1], '"');
+        mlir::stablehlo::ComparisonType type = mlir::stablehlo::symbolizeComparisonType(typeStr).value();
+        return mlir::stablehlo::ComparisonTypeAttr::get(&context, type);
     } else if (attrType == "DotAlgorithmAttr") {  // (DotAlgorithmAttr <type1> <type2> <type3> <int1> <int2> <int3> <bool>)
         mlir::Type type1 = parseType(split[1]);
         mlir::Type type2 = parseType(split[2]);
@@ -603,6 +611,12 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         mlir::SymbolRefAttr symbolRefAttr = cast<mlir::SymbolRefAttr>(attr);
         std::string value = symbolRefAttr.getRootReference().str();
         ss << "(SymbolRefAttr \"" << value << "\")";
+    } else if (typeId == mlir::TypeID::get<mlir::stablehlo::ComparisonDirectionAttr>()) {  
+        mlir::stablehlo::ComparisonDirectionAttr comparisonDirectionAttr = cast<mlir::stablehlo::ComparisonDirectionAttr>(attr);
+        ss << "(ComparisonDirectionAttr (" << mlir::stablehlo::stringifyComparisonDirection(comparisonDirectionAttr.getValue()) << "))";
+    } else if (typeId == mlir::TypeID::get<mlir::stablehlo::ComparisonTypeAttr>()) {  // (ComparisonTypeAttr <type>)
+        mlir::stablehlo::ComparisonTypeAttr comparisonTypeAttr = cast<mlir::stablehlo::ComparisonTypeAttr>(attr);
+        ss << "(ComparisonTypeAttr (" << mlir::stablehlo::stringifyComparisonType(comparisonTypeAttr.getValue()) << "))";
     } else if (typeId == mlir::TypeID::get<mlir::stablehlo::PrecisionAttr>()) {  // (PrecisionAttr <type>)
         mlir::stablehlo::PrecisionAttr precisionAttr = cast<mlir::stablehlo::PrecisionAttr>(attr);
         ss << "(PrecisionAttr (" << mlir::stablehlo::stringifyPrecision(precisionAttr.getValue()) << "))";
