@@ -204,8 +204,8 @@ public:
     mlir::Block* parseBlock(const std::string&, mlir::OpBuilder&);
     std::vector<mlir::Block*> parseBlocksFromRegion(const std::string&, mlir::OpBuilder&);
 
-    template<typename T>
-    std::vector<T> parseVector(const std::string& vecStr);
+    template<typename T, size_t N>
+    llvm::SmallVector<T, N> parseVector(const std::string& vecStr);
 
     EggifiedOp* eggifyValue(mlir::Value);
     EggifiedOp* eggifyOperation(mlir::Operation*);

@@ -32,6 +32,28 @@ inline int32_t convertFromString<int32_t>(const std::string& str) {
 }
 
 template<>
+inline int16_t convertFromString<int16_t>(const std::string& str) {
+    return static_cast<int16_t>(std::stoi(str));
+}
+
+template<>
+inline int8_t convertFromString<int8_t>(const std::string& str) {
+    return static_cast<int8_t>(std::stoi(str));
+}
+
+template<>
+inline bool convertFromString<bool>(const std::string& str) {
+    if (str == "true" || str == "1") {
+        return true;
+    } else if (str == "false" || str == "0") {
+        return false;
+    } else {
+        llvm::outs() << "Invalid boolean string: " << str << "\n";
+        exit(1);
+    }
+}
+
+template<>
 inline int64_t convertFromString<int64_t>(const std::string& str) {
     return std::stoll(str);
 }
