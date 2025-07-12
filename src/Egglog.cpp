@@ -454,15 +454,15 @@ mlir::Attribute Egglog::parseAttribute(const std::string& attrStr) {
     } else if (attrType == "SymbolRefAttr") {  // (SymbolRefAttr "<name>")
         return mlir::SymbolRefAttr::get(&context, unwrap(split[1], '"'));
     } else if (attrType == "PrecisionAttr") {  // (PrecisionAttr (DEFAULT | HIGH | HIGHEST))
-        std::string precisionStr = unwrap(split[1], '"');
+        std::string precisionStr = unwrapBrackets(split[1]);
         mlir::stablehlo::Precision precision = mlir::stablehlo::symbolizePrecision(precisionStr).value();
         return mlir::stablehlo::PrecisionAttr::get(&context, precision);
     } else if (attrType == "ComparisonDirectionAttr") {  // (ComparisonDirectionAttr (EQ | NE | LT | LE | GT | GE))
-        std::string directionStr = unwrap(split[1], '"');
+        std::string directionStr = unwrapBrackets(split[1]);
         mlir::stablehlo::ComparisonDirection direction = mlir::stablehlo::symbolizeComparisonDirection(directionStr).value();
         return mlir::stablehlo::ComparisonDirectionAttr::get(&context, direction);
     } else if (attrType == "ComparisonTypeAttr") { // (ComparisonTypeAttr (NOTYPE | FLOAT | TOTALORDER | SIGNED | UNSIGNED))
-        std::string typeStr = unwrap(split[1], '"');
+        std::string typeStr = unwrapBrackets(split[1]);
         mlir::stablehlo::ComparisonType type = mlir::stablehlo::symbolizeComparisonType(typeStr).value();
         return mlir::stablehlo::ComparisonTypeAttr::get(&context, type);
     } else if (attrType == "DotAlgorithmAttr") {  // (DotAlgorithmAttr <type1> <type2> <type3> <int1> <int2> <int3> <bool>)

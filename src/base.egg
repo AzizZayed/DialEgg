@@ -83,7 +83,7 @@
 (function ArrayAttr (AttrVec) Attr)
 (function DenseIntArrayAttr (i64 IntVec Type) Attr)
 (function DenseFloatArrayAttr (f64 FloatVec Type) Attr)
-(function DenseIntElementsAttr (FloatVec Type) Attr)
+(function DenseIntElementsAttr (IntVec Type) Attr)
 (function DenseFPElementsAttr (FloatVec Type) Attr)
 (function SymbolRefAttr (String) Attr)
 
