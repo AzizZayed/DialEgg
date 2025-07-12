@@ -40,7 +40,7 @@ EgglogOpDef EgglogOpDef::parseOpFunction(const std::string& opStr) {
 
     std::string version = "";
     std::string name = fullName.substr(firstUnderscore + 1);
-    if (isdigit(fullName.back())) {
+    if (fullName[fullName.size() - 2] == '_' && isdigit(fullName.back())) {
         size_t lastUnderscore = fullName.find_last_of('_');
         version = fullName.substr(lastUnderscore + 1);
         name = fullName.substr(firstUnderscore + 1, lastUnderscore - firstUnderscore - 1);
@@ -70,7 +70,6 @@ EgglogOpDef EgglogOpDef::parseOpFunction(const std::string& opStr) {
 
     return EgglogOpDef {
             .str = newOpStr,
-            .fullName = fullName,
             .dialect = dialect,
             .name = name,
             .version = version,
@@ -741,9 +740,8 @@ mlir::Operation* Egglog::parseOperation(const std::string& newOpStr, mlir::OpBui
         exit(1);
     }
 
-    opName[opName.find_first_of('_')] = '.';  // Replace first underscore with dot
     EgglogOpDef egglogOpDef = supportedEgglogOps.at(opName);
-    std::string mlirOpName = egglogOpDef.dialect + "." + egglogOpDef.name;
+    std::string mlirOpName = egglogOpDef.mlirName();
 
     size_t index = 0;
 
@@ -886,13 +884,14 @@ EggifiedOp* Egglog::eggifyOperation(mlir::Operation* op) {
         return foundEggifiedOp;
     }
 
-    std::string opName = op->getName().getStringRef().str();
+    // dialect_opname
+    std::string opName = op->getDialect()->getNamespace().str() + "_" + op->getName().stripDialect().str();
     bool isSupported = supportedEgglogOps.find(opName) != supportedEgglogOps.end();
 
     if (!isSupported) {
         // check is supported if we add the number of operands
         // TODO change to lookup in the map for the appropriate operation name
-        std::string opNameWithNumOperands = opName + "." + std::to_string(op->getNumOperands());
+        std::string opNameWithNumOperands = opName + "_" + std::to_string(op->getNumOperands());
         isSupported = supportedEgglogOps.find(opNameWithNumOperands) != supportedEgglogOps.end();
 
         if (!isSupported) {
@@ -907,13 +906,13 @@ EggifiedOp* Egglog::eggifyOperation(mlir::Operation* op) {
 
     // check if not the same number of operands
     if (egglogOpDef.nOperands != op->getNumOperands()) {
-        llvm::outs() << "Unsupported operation '" << opName << "' since it has " << op->getNumOperands() << " operands but egglog's '" << egglogOpDef.fullName << "' expects " << egglogOpDef.nOperands << " operands.\n";
+        llvm::outs() << "Unsupported operation '" << opName << "' since it has " << op->getNumOperands() << " operands but egglog's '" << egglogOpDef.mlirName() << "' expects " << egglogOpDef.nOperands << " operands.\n";
         return eggifyOpaqueOperation(op);
     }
 
     // check if not the same number of results
     if (egglogOpDef.nResults != op->getNumResults()) {
-        llvm::outs() << "Unsupported operation '" << opName << "' since it has " << op->getNumResults() << " results but egglog's '" << egglogOpDef.fullName << "' expects " << egglogOpDef.nResults << " results.\n";
+        llvm::outs() << "Unsupported operation '" << opName << "' since it has " << op->getNumResults() << " results but egglog's '" << egglogOpDef.mlirName() << "' expects " << egglogOpDef.nResults << " results.\n";
         return eggifyOpaqueOperation(op);
     }
 

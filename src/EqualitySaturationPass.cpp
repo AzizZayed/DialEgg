@@ -213,8 +213,7 @@ void EqualitySaturationPass::init() {
         if (EgglogOpDef::isOpFunction(line)) {
             EgglogOpDef parsedOp = EgglogOpDef::parseOpFunction(line);
 
-            supportedOps.emplace(parsedOp.dialect + "." + parsedOp.name + (parsedOp.version.empty() ? "" : "." + parsedOp.version), parsedOp);
-            supportedOps.emplace(parsedOp.dialect + "_" + parsedOp.name + (parsedOp.version.empty() ? "" : "_" + parsedOp.version), parsedOp);
+            supportedOps.emplace(parsedOp.egglogName(), parsedOp);
             supportedDialects.insert(parsedOp.dialect);
         }
     }

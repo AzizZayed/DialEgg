@@ -31,7 +31,7 @@ struct EgglogCustomDefs {
 /** Holds the information about a custom egglog operation */
 struct EgglogOpDef {
     std::string str;
-    std::string fullName, dialect, name, version;
+    std::string dialect, name, version;
     std::vector<std::string> args;
 
     size_t nOperands;
@@ -42,7 +42,7 @@ struct EgglogOpDef {
     size_t cost = 1;
 
     std::string egglogName() const {
-        return dialect + "_" + name;
+        return dialect + "_" + name + (version.empty() ? "" : "_" + version);
     }
 
     std::string mlirName() const {
