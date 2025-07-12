@@ -194,11 +194,17 @@ public:
     mlir::Block* parseBlock(const std::string&, mlir::OpBuilder&);
     std::vector<mlir::Block*> parseBlocksFromRegion(const std::string&, mlir::OpBuilder&);
 
+    template<typename T>
+    std::vector<T> parseVector(const std::string& vecStr);
+
     EggifiedOp* eggifyValue(mlir::Value);
     EggifiedOp* eggifyOperation(mlir::Operation*);
     EggifiedOp* eggifyOpaqueOperation(mlir::Operation*);
     std::string eggifyBlock(mlir::Block&);
     std::string eggifyRegion(mlir::Region&);
+
+    template<typename T>
+    void eggifyAttrRange(llvm::raw_string_ostream& ss, mlir::detail::ElementsAttrRange<mlir::DenseElementsAttr::ElementIterator<T>> range);
 
     EggifiedOp* findEggifiedOp(mlir::Operation*);
     EggifiedOp* findEggifiedOp(mlir::Value);

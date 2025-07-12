@@ -424,23 +424,33 @@ mlir::Attribute Egglog::parseAttribute(const std::string& attrStr) {
         mlir::Type type = parseType(split[3]);
         return mlir::DenseArrayAttr::get(&context, type, size, llvm::ArrayRef<char>(reinterpret_cast<const char*>(values.data()), values.size() * sizeof(double)));
     } else if (attrType == "DenseIntElementsAttr") {  // (DenseIntElementsAttr (vec-of <int1> <int2> ... <intN>) <type>)
-        std::vector<int64_t> values;
-        std::vector<std::string> arraySplit = splitExpression(split[1]);
-        for (size_t i = 1; i < arraySplit.size(); i++) {
-            values.push_back(std::stoll(arraySplit[i]));
-        }
         mlir::Type type = parseType(split[2]);
         mlir::ShapedType shapedType = cast<mlir::ShapedType>(type);
-        return mlir::DenseIntElementsAttr::get(shapedType, values);
+
+        if (shapedType.getElementType().isInteger(32)) {  // (DenseIntElementsAttr (vec-of <int1> <int2> ... <intN>) I32)
+            std::vector<int32_t> values = parseVector<int32_t>(split[1]);
+            return mlir::DenseIntElementsAttr::get(shapedType, values);
+        } else if (shapedType.getElementType().isInteger(64)) {  // (DenseIntElementsAttr (vec-of <int1> <int2> ... <intN>) I64)
+            std::vector<int64_t> values = parseVector<int64_t>(split[1]);
+            return mlir::DenseIntElementsAttr::get(shapedType, values);
+        } else {
+            llvm::outs() << "Unsupported DenseIntElementsAttr type: " << shapedType.getElementType() << "\n";
+            exit(1);
+        }
     } else if (attrType == "DenseFPElementsAttr") {  // (DenseFloatElementsAttr (vec-of <float1> <float2> ... <floatN>) <type>)
-        std::vector<double> values;
-        std::vector<std::string> arraySplit = splitExpression(split[1]);
-        for (size_t i = 1; i < arraySplit.size(); i++) {
-            values.push_back(std::stod(arraySplit[i]));
-        }
         mlir::Type type = parseType(split[2]);
         mlir::ShapedType shapedType = cast<mlir::ShapedType>(type);
-        return mlir::DenseFPElementsAttr::get(shapedType, values);
+
+        if (shapedType.getElementType().isF32()) {  // (DenseFloatElementsAttr (vec-of <float1> <float2> ... <floatN>) F32)
+            std::vector<float> values = parseVector<float>(split[1]);
+            return mlir::DenseFPElementsAttr::get(shapedType, values);
+        } else if (shapedType.getElementType().isF64()) {  // (DenseFloatElementsAttr (vec-of <float1> <float2> ... <floatN>) F64)
+            std::vector<double> values = parseVector<double>(split[1]);
+            return mlir::DenseFPElementsAttr::get(shapedType, values);
+        } else {
+            llvm::outs() << "Unsupported DenseFPElementsAttr type: " << shapedType.getElementType() << "\n";
+            exit(1);
+        }
     } else if (attrType == "SymbolRefAttr") {  // (SymbolRefAttr "<name>")
         return mlir::SymbolRefAttr::get(&context, unwrap(split[1], '"'));
     } else if (attrType == "PrecisionAttr") {  // (PrecisionAttr (DEFAULT | HIGH | HIGHEST))
@@ -499,6 +509,16 @@ mlir::Attribute Egglog::parseAttribute(const std::string& attrStr) {
         llvm::outs() << "Unsupported attribute type: " << attrType << "\n";
         exit(1);
     }
+}
+
+template<typename T>
+std::vector<T> Egglog::parseVector(const std::string& vecStr) {
+    std::vector<T> result;
+    std::vector<std::string> vecSplit = splitExpression(vecStr);
+    for (size_t i = 1; i < vecSplit.size(); i++) {
+        result.push_back(convertFromString<T>(vecSplit[i]));
+    }
+    return result;
 }
 
 std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
@@ -576,32 +596,24 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
 
         if (elementType.isInteger(64)) {
             auto values = denseIntOrFPAttr.getValues<int64_t>();
-            ss << "(DenseIntElementsAttr (vec-of";
-            for (int64_t value: values) {
-                ss << " " << value;
-            }
-            ss << ") " << eggifyType(shapedType) << ")";
+            ss << "(DenseIntElementsAttr ";
+            eggifyAttrRange<int64_t>(ss, values);
+            ss << eggifyType(shapedType) << ")";
         } else if (elementType.isInteger(32)) {
             auto values = denseIntOrFPAttr.getValues<int32_t>();
-            ss << "(DenseIntElementsAttr (vec-of";
-            for (int32_t value: values) {
-                ss << " " << value;
-            }
-            ss << ") " << eggifyType(shapedType) << ")";
+            ss << "(DenseIntElementsAttr ";
+            eggifyAttrRange<int32_t>(ss, values);
+            ss << eggifyType(shapedType) << ")";
         } else if (elementType.isF64()) {
             auto values = denseIntOrFPAttr.getValues<double>();
-            ss << "(DenseFPElementsAttr (vec-of";
-            for (double value: values) {
-                ss << " " << value;
-            }
-            ss << ") " << eggifyType(shapedType) << ")";
+            ss << "(DenseFPElementsAttr ";
+            eggifyAttrRange<double>(ss, values);
+            ss << eggifyType(shapedType) << ")";
         } else if (elementType.isF32()) {
             auto values = denseIntOrFPAttr.getValues<float>();
-            ss << "(DenseFPElementsAttr (vec-of";
-            for (float value: values) {
-                ss << " " << value;
-            }
-            ss << ") " << eggifyType(shapedType) << ")";
+            ss << "(DenseFPElementsAttr ";
+            eggifyAttrRange<float>(ss, values);
+            ss << eggifyType(shapedType) << ")";
         } else {
             llvm::outs() << "Unsupported DenseIntOrFPElementsAttr type: " << elementType << "\n";
             exit(1);
@@ -685,6 +697,15 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
     // }
 
     return egglogCode;
+}
+
+template<typename T>
+void Egglog::eggifyAttrRange(llvm::raw_string_ostream& ss, mlir::detail::ElementsAttrRange<mlir::DenseElementsAttr::ElementIterator<T>> range) {
+    ss << "(vec-of";
+    for (const T& value: range) {
+        ss << " " << std::to_string(value);
+    }
+    ss << ")";
 }
 
 mlir::Value Egglog::parseValue(const std::string& valueStr) {
