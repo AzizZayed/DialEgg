@@ -884,46 +884,18 @@ EggifiedOp* Egglog::eggifyOperation(mlir::Operation* op) {
         return foundEggifiedOp;
     }
 
-    // dialect_opname
-    std::string opName = op->getDialect()->getNamespace().str() + "_" + op->getName().stripDialect().str();
-    bool isSupported = supportedEgglogOps.find(opName) != supportedEgglogOps.end();
-
-    if (!isSupported) {
-        // check is supported if we add the number of operands
-        // TODO change to lookup in the map for the appropriate operation name
-        std::string opNameWithNumOperands = opName + "_" + std::to_string(op->getNumOperands());
-        isSupported = supportedEgglogOps.find(opNameWithNumOperands) != supportedEgglogOps.end();
-
-        if (!isSupported) {
-            LLVM_DEBUG(llvm::dbgs() << "Unsupported operation '" << opName << "' and '" << opNameWithNumOperands << "' but using the result as a variable.\n");
-            return eggifyOpaqueOperation(op);
-        }
-
-        opName = opNameWithNumOperands;
-    }
-
-    EgglogOpDef egglogOpDef = supportedEgglogOps.at(opName);
-
-    // check if not the same number of operands
-    if (egglogOpDef.nOperands != op->getNumOperands()) {
-        llvm::outs() << "Unsupported operation '" << opName << "' since it has " << op->getNumOperands() << " operands but egglog's '" << egglogOpDef.mlirName() << "' expects " << egglogOpDef.nOperands << " operands.\n";
+    std::optional<EgglogOpDef> egglogOpDefOpt = findEgglogOpDef(op);
+    if (!egglogOpDefOpt.has_value()) {
+        // If the operation is not supported, we return an opaque operation
         return eggifyOpaqueOperation(op);
     }
 
-    // check if not the same number of results
-    if (egglogOpDef.nResults != op->getNumResults()) {
-        llvm::outs() << "Unsupported operation '" << opName << "' since it has " << op->getNumResults() << " results but egglog's '" << egglogOpDef.mlirName() << "' expects " << egglogOpDef.nResults << " results.\n";
-        return eggifyOpaqueOperation(op);
-    }
-
-    op->removeAttr("linalg.memoized_indexing_maps");  // temporary fix for linalg ops
+    EgglogOpDef egglogOpDef = egglogOpDefOpt.value();
+    std::string opName = egglogOpDef.egglogName();
 
     std::stringstream ss;
 
-    std::string cleanOpName = opName;
-    std::replace(cleanOpName.begin(), cleanOpName.end(), '.', '_');
-
-    ss << "(" << cleanOpName;  // (<op>
+    ss << "(" << opName;  // (<op>
 
     // <operand1> <operand2> ... <operandN>
     std::vector<EggifiedOp*> operands;
@@ -988,6 +960,35 @@ std::string Egglog::eggifyRegion(mlir::Region& region) {
     }
     ss << "))";
     return ss.str();
+}
+
+std::optional<EgglogOpDef> Egglog::findEgglogOpDef(mlir::Operation* op) {
+    std::string opName = op->getDialect()->getNamespace().str() + "_" + op->getName().stripDialect().str();
+    if (supportedEgglogOps.find(opName) != supportedEgglogOps.end()) {
+        EgglogOpDef egglogOpDef = supportedEgglogOps.at(opName);
+        if (egglogOpDef.matches(op)) {
+            return egglogOpDef;  // found the operation definition
+        }
+    }
+
+    // check is supported if we add the number of operands
+    std::string opNameWithNumOperands = opName + "_" + std::to_string(op->getNumOperands());
+    if (supportedEgglogOps.find(opNameWithNumOperands) != supportedEgglogOps.end()) {
+        EgglogOpDef egglogOpDef = supportedEgglogOps.at(opNameWithNumOperands);
+        if (egglogOpDef.matches(op)) {
+            return egglogOpDef;  // found the operation definition
+        }
+    }
+
+    // check if another version of the op supports the given number of operands/results (maybe the number at the end is version and not number of operands)
+    for (const auto& [name, egglogOpDef]: supportedEgglogOps) {
+        if (name.find(opName + "_") == 0 && name.size() == opName.size() + 2 && std::isdigit(name.back()) && egglogOpDef.matches(op)) {
+            return egglogOpDef;  // found the operation definition
+        }
+    }
+
+    llvm::outs() << "Operation '" << opName << "' is unsupported or does not match the expected number of operands/results.\n";
+    return std::nullopt;  // operation not found
 }
 
 EggifiedOp* Egglog::findEggifiedOp(mlir::Operation* op) {

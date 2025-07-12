@@ -49,6 +49,16 @@ struct EgglogOpDef {
         return dialect + "." + name;
     }
 
+    bool matches(mlir::Operation* op) const {
+        if (op->getName().getStringRef() != mlirName()) {
+            return false;
+        }
+        if (op->getNumOperands() != nOperands || op->getNumResults() != nResults) {
+            return false;
+        }
+        return true;
+    }
+
     // format: (function [name] ([params]) Op) or (function [name] ([params]) Op :cost [cost])
     static bool isOpFunction(const std::string& opStr);
     static EgglogOpDef parseOpFunction(const std::string& opStr);
@@ -206,6 +216,7 @@ public:
     template<typename T>
     void eggifyAttrRange(llvm::raw_string_ostream& ss, mlir::detail::ElementsAttrRange<mlir::DenseElementsAttr::ElementIterator<T>> range);
 
+    std::optional<EgglogOpDef> findEgglogOpDef(mlir::Operation* op);
     EggifiedOp* findEggifiedOp(mlir::Operation*);
     EggifiedOp* findEggifiedOp(mlir::Value);
     EggifiedOp* findEggifiedOp(size_t);
