@@ -758,8 +758,7 @@ mlir::Operation* Egglog::parseOperation(const std::string& newOpStr, mlir::OpBui
         return nullptr;
     }
 
-    bool cacheable = opName.find("func_call") == std::string::npos;  // TODO hacky way to check if cacheable, fix this
-    if (parsedOps.find(newOpStr) != parsedOps.end() && cacheable) {  // look in the parsed ops cache
+    if (parsedOps.find(newOpStr) != parsedOps.end()) {  // look in the parsed ops cache
         return parsedOps[newOpStr];
     }
 

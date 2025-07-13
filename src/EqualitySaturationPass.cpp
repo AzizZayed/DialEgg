@@ -194,19 +194,20 @@ void EqualitySaturationPass::runOnFunction(mlir::func::FuncOp& func) {
         std::string parentOpName = block.getParentOp()->getName().getStringRef().str();
         std::string blockName = funcName.str() + "_" + parentOpName;
         runOnBlock(block, blockName);
+    }
 
-        // Temporary dead code elimination (until this PR is merged: https://github.com/llvm/llvm-project/pull/99671)
-        bool clean = false;
-        while (!clean) {
-            clean = true;
-
-            block.walk([&](mlir::Operation* op) {
-                if (mlir::isOpTriviallyDead(op)) {
-                    clean = false;
-                    op->erase();
-                }
-            });
-        }
+    // Temporary dead code elimination (until this PR is merged: https://github.com/llvm/llvm-project/pull/99671)
+    bool clean = false;
+    while (!clean) {
+        clean = true;
+        
+        func.walk([&](mlir::Operation* op) {
+            bool deadFunctionCall = mlir::isa<mlir::func::CallOp>(op) && op->use_empty(); // we assume for our use case that function calls have no side effects (BAD)
+            if (mlir::isOpTriviallyDead(op) || deadFunctionCall) {
+                clean = false;
+                op->erase();
+            }
+        });
     }
 
     LLVM_DEBUG(llvm::dbgs() << "-----------------------------------------\n");
