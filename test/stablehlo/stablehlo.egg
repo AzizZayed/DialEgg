@@ -1,0 +1,69 @@
+(include "src/base.egg") ; The tests are run from "build/test/stablehlo"
+
+;;;; StableHLO Dialect ;;;;
+
+;; Types
+(datatype Precision (DEFAULT) (HIGH) (HIGHEST))
+(datatype ComparisonDirection (EQ) (NE) (GE) (GT) (LE) (LT))
+(datatype ComparisonType (NOTYPE) (FLOAT) (TOTALORDER) (SIGNED) (UNSIGNED))
+
+;; Attrs
+(function PrecisionAttr (Precision) Attr)
+(function ComparisonDirectionAttr (ComparisonDirection) Attr)
+(function ComparisonTypeAttr (ComparisonType) Attr)
+(function DotDimensionNumbersAttr (IntVec IntVec IntVec IntVec) Attr)
+(function DotAlgorithmAttr (Type Type Type i64 i64 i64 bool) Attr)
+
+;; Ops
+(function stablehlo_abs (Op Type) Op)
+(function stablehlo_add (Op Op Type) Op)
+(function stablehlo_and (Op Op Type) Op)
+(function stablehlo_bitcast_convert (Op Type) Op)
+(function stablehlo_broadcast_in_dim (Op AttrPair Type) Op)
+(function stablehlo_compare (Op Op AttrPair AttrPair Type) Op)
+(function stablehlo_concatenate (Op Op AttrPair Type) Op)(function stablehlo_concatenate_2 (Op Op AttrPair Type) Op)
+(function stablehlo_concatenate_3 (Op Op Op AttrPair Type) Op)
+(function stablehlo_concatenate_4 (Op Op Op Op AttrPair Type) Op)
+(function stablehlo_concatenate_5 (Op Op Op Op Op AttrPair Type) Op)
+(function stablehlo_constant (AttrPair Type) Op)
+(function stablehlo_convert (Op Type) Op)
+(function stablehlo_convolution (Op Op AttrPair AttrPair AttrPair AttrPair AttrPair AttrPair AttrPair AttrPair AttrPair Type) Op)
+(function stablehlo_cosine (Op Type) Op)
+(function stablehlo_divide (Op Op Type) Op)
+(function stablehlo_dot_general (Op Op AttrPair AttrPair Type) Op)
+(function stablehlo_exponential (Op Type) Op)
+(function stablehlo_gather (Op Op AttrPair AttrPair AttrPair Type) Op)
+(function stablehlo_iota (AttrPair Type) Op)
+(function stablehlo_is_finite (Op Type) Op)
+(function stablehlo_log (Op Type) Op)
+(function stablehlo_maximum (Op Op Type) Op)
+(function stablehlo_multiply (Op Op Type) Op)
+(function stablehlo_negate (Op Type) Op)
+(function stablehlo_or (Op Op Type) Op)
+(function stablehlo_pad (Op Op AttrPair AttrPair AttrPair Type) Op)
+(function stablehlo_power (Op Op Type) Op)
+; reduce
+; reduce_window
+(function stablehlo_remainder (Op Op Type) Op)
+(function stablehlo_reshape (Op Type) Op)
+(function stablehlo_return (Op) Op)
+(function stablehlo_rsqrt (Op Type) Op)
+; scatter
+(function stablehlo_select (Op Op Op Type) Op)
+(function stablehlo_shift_left (Op Op Type) Op)
+(function stablehlo_shift_right_logical (Op Op Type) Op)
+(function stablehlo_sign (Op Type) Op)
+(function stablehlo_sine (Op Type) Op)
+(function stablehlo_slice (Op AttrPair AttrPair AttrPair Type) Op)
+(function stablehlo_sqrt (Op Type) Op)
+(function stablehlo_subtract (Op Op Type) Op)
+(function stablehlo_tanh (Op Type) Op)
+(function stablehlo_transpose (Op AttrPair Type) Op)
+; while
+(function stablehlo_xor (Op Op Type) Op)
+
+;; OPS HERE ;;
+
+;; RULES HERE ;;
+
+;; EXTRACTS HERE ;;
