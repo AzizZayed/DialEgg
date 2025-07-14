@@ -1,5 +1,18 @@
 (include "src/base.egg") ; The tests are run from "build/test/stablehlo"
 
+;;;; func dialect ;;;;
+
+;; Ops
+
+(function func_call_0 (AttrPair Type) Op)
+(function func_call_1 (Op AttrPair Type) Op)
+(function func_call_2 (Op Op AttrPair Type) Op)
+(function func_call_3 (Op Op Op AttrPair Type) Op)
+(function func_call_4 (Op Op Op Op AttrPair Type) Op)
+(function func_call_5 (Op Op Op Op Op AttrPair Type) Op)
+(function func_call_6 (Op Op Op Op Op Op AttrPair Type) Op)
+(function func_return (Op) Op)
+
 ;;;; StableHLO Dialect ;;;;
 
 ;; Types
@@ -21,7 +34,8 @@
 (function stablehlo_bitcast_convert (Op Type) Op)
 (function stablehlo_broadcast_in_dim (Op AttrPair Type) Op)
 (function stablehlo_compare (Op Op AttrPair AttrPair Type) Op)
-(function stablehlo_concatenate (Op Op AttrPair Type) Op)(function stablehlo_concatenate_2 (Op Op AttrPair Type) Op)
+(function stablehlo_concatenate (Op Op AttrPair Type) Op)
+(function stablehlo_concatenate_2 (Op Op AttrPair Type) Op)
 (function stablehlo_concatenate_3 (Op Op Op AttrPair Type) Op)
 (function stablehlo_concatenate_4 (Op Op Op Op AttrPair Type) Op)
 (function stablehlo_concatenate_5 (Op Op Op Op Op AttrPair Type) Op)

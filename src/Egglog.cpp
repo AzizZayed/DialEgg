@@ -1,5 +1,6 @@
 #include <regex>
 #include <chrono>
+#include <algorithm>
 
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Debug.h"
@@ -411,7 +412,7 @@ mlir::Attribute Egglog::parseAttribute(const std::string& attrStr) {
             values.push_back(std::stoll(arraySplit[i]));
         }
         mlir::Type type = parseType(split[3]);
-        size_t byteWidth = type.getIntOrFloatBitWidth() / 8;
+        size_t byteWidth = std::max(1u, type.getIntOrFloatBitWidth() / 8);
         return mlir::DenseArrayAttr::get(&context, type, size, llvm::ArrayRef<char>(reinterpret_cast<const char*>(values.data()), values.size() * byteWidth));
     } else if (attrType == "DenseFloatArrayAttr") {  // (DenseFloatArrayAttr N (vec-of <float1> <float2> ... <floatN>) <type>)
         int64_t size = std::stoll(split[1]);
@@ -582,21 +583,34 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         // if Float type, then it is a DenseFloatArrayAttr
 
         if (isa<mlir::IntegerType>(elementType)) {
-            llvm::ArrayRef<int64_t> values(reinterpret_cast<const int64_t*>(rawData.data()), size);
-            ss << "(DenseIntArrayAttr " << size << " (vec-of";
-            for (int64_t value: values) {
-                ss << " " << value;
+            if (elementType.isInteger(64)) {
+                llvm::ArrayRef<int64_t> values(reinterpret_cast<const int64_t*>(rawData.data()), size);
+                ss << "(DenseIntArrayAttr " << size << " ";
+                eggifyIterable<int64_t>(ss, values);
+            } else if (elementType.isInteger(32)) {
+                llvm::ArrayRef<int32_t> values(reinterpret_cast<const int32_t*>(rawData.data()), size);
+                ss << "(DenseIntArrayAttr " << size << " ";
+                eggifyIterable<int32_t>(ss, values);
+            } else if (elementType.isInteger(16)) {
+                llvm::ArrayRef<int16_t> values(reinterpret_cast<const int16_t*>(rawData.data()), size);
+                ss << "(DenseIntArrayAttr " << size << " ";
+                eggifyIterable<int16_t>(ss, values);
+            } else if (elementType.isInteger(8)) {
+                llvm::ArrayRef<int8_t> values(reinterpret_cast<const int8_t*>(rawData.data()), size);
+                ss << "(DenseIntArrayAttr " << size << " ";
+                eggifyIterable<int8_t>(ss, values);
+            } else if (elementType.isInteger(1)) {
+                llvm::ArrayRef<bool> values(reinterpret_cast<const bool*>(rawData.data()), size);
+                ss << "(DenseIntArrayAttr " << size << " ";
+                eggifyIterable<bool>(ss, values);
             }
-            ss << ") " << eggifyType(elementType) << ")";
         } else if (isa<mlir::FloatType>(elementType)) {
             llvm::ArrayRef<double> values(reinterpret_cast<const double*>(rawData.data()), size);
-            ss << "(DenseFloatArrayAttr " << size << " (vec-of";
-            for (double value: values) {
-                ss << " " << value;
-            }
-            ss << ") " << eggifyType(elementType) << ")";
+            ss << "(DenseFloatArrayAttr " << size;
+            eggifyIterable<double>(ss, values);
         }
 
+        ss << " " << eggifyType(elementType) << ")";
     } else if (typeId == mlir::TypeID::get<mlir::DenseIntOrFPElementsAttr>()) {
         mlir::DenseIntOrFPElementsAttr denseIntOrFPAttr = cast<mlir::DenseIntOrFPElementsAttr>(attr);
         mlir::Type elementType = denseIntOrFPAttr.getElementType();
@@ -605,41 +619,37 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         if (elementType.isInteger(64)) {
             auto values = denseIntOrFPAttr.getValues<int64_t>();
             ss << "(DenseIntElementsAttr ";
-            eggifyAttrRange<int64_t>(ss, values);
+            eggifyIterable<int64_t>(ss, values);
             ss << eggifyType(shapedType) << ")";
         } else if (elementType.isInteger(32)) {
             auto values = denseIntOrFPAttr.getValues<int32_t>();
             ss << "(DenseIntElementsAttr ";
-            eggifyAttrRange<int32_t>(ss, values);
+            eggifyIterable<int32_t>(ss, values);
             ss << eggifyType(shapedType) << ")";
         } else if (elementType.isInteger(16)) {
             auto values = denseIntOrFPAttr.getValues<int16_t>();
             ss << "(DenseIntElementsAttr ";
-            eggifyAttrRange<int16_t>(ss, values);
+            eggifyIterable<int16_t>(ss, values);
             ss << eggifyType(shapedType) << ")";
         } else if (elementType.isInteger(8)) {
             auto values = denseIntOrFPAttr.getValues<int8_t>();
             ss << "(DenseIntElementsAttr ";
-            eggifyAttrRange<int8_t>(ss, values);
+            eggifyIterable<int8_t>(ss, values);
             ss << eggifyType(shapedType) << ")";
         } else if (elementType.isInteger(1)) {
             auto values = denseIntOrFPAttr.getValues<bool>();
             ss << "(DenseIntElementsAttr ";
-            ss << "(vec-of";
-            for (bool value: values) {
-                ss << " " << std::to_string(value);
-            }
-            ss << ")";
+            eggifyIterable<bool>(ss, values);
             ss << eggifyType(shapedType) << ")";
         } else if (elementType.isF64()) {
             auto values = denseIntOrFPAttr.getValues<double>();
             ss << "(DenseFPElementsAttr ";
-            eggifyAttrRange<double>(ss, values);
+            eggifyIterable<double>(ss, values);
             ss << eggifyType(shapedType) << ")";
         } else if (elementType.isF32()) {
             auto values = denseIntOrFPAttr.getValues<float>();
             ss << "(DenseFPElementsAttr ";
-            eggifyAttrRange<float>(ss, values);
+            eggifyIterable<float>(ss, values);
             ss << eggifyType(shapedType) << ")";
         } else {
             llvm::outs() << "Unsupported DenseIntOrFPElementsAttr type: " << elementType << "\n";
@@ -688,7 +698,7 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
             ss << " " << dim;
         }
         ss << "))";
-
+    
     } else if (egglogCustom.attrStringifiers.find(typeName) != egglogCustom.attrStringifiers.end()) {  // custom attr by user
         AttrStringifyFunction stringifyFunc = egglogCustom.attrStringifiers.at(typeName);
         std::vector<std::string> split = stringifyFunc(attr, *this);
@@ -726,8 +736,8 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
     return egglogCode;
 }
 
-template<typename T>
-void Egglog::eggifyAttrRange(llvm::raw_string_ostream& ss, mlir::detail::ElementsAttrRange<mlir::DenseElementsAttr::ElementIterator<T>> range) {
+template<typename T, typename U>
+void Egglog::eggifyIterable(llvm::raw_string_ostream& ss, U range) {
     ss << "(vec-of";
     for (T value: range) {
         ss << " " << std::to_string(value);

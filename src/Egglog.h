@@ -213,8 +213,8 @@ public:
     std::string eggifyBlock(mlir::Block&);
     std::string eggifyRegion(mlir::Region&);
 
-    template<typename T>
-    void eggifyAttrRange(llvm::raw_string_ostream& ss, mlir::detail::ElementsAttrRange<mlir::DenseElementsAttr::ElementIterator<T>> range);
+    template<typename T, typename U>
+    void eggifyIterable(llvm::raw_string_ostream& ss, U range);
 
     std::optional<EgglogOpDef> findEgglogOpDef(mlir::Operation* op);
     EggifiedOp* findEggifiedOp(mlir::Operation*);

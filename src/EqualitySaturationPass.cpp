@@ -196,19 +196,6 @@ void EqualitySaturationPass::runOnFunction(mlir::func::FuncOp& func) {
         runOnBlock(block, blockName);
     }
 
-    // Temporary dead code elimination (until this PR is merged: https://github.com/llvm/llvm-project/pull/99671)
-    bool clean = false;
-    while (!clean) {
-        clean = true;
-        
-        func.walk([&](mlir::Operation* op) {
-            bool deadFunctionCall = mlir::isa<mlir::func::CallOp>(op) && op->use_empty(); // we assume for our use case that function calls have no side effects (BAD)
-            if (mlir::isOpTriviallyDead(op) || deadFunctionCall) {
-                clean = false;
-                op->erase();
-            }
-        });
-    }
 
     LLVM_DEBUG(llvm::dbgs() << "-----------------------------------------\n");
     LLVM_DEBUG(llvm::dbgs() << "Done running on function: " << funcName << "\n");
@@ -229,6 +216,20 @@ void EqualitySaturationPass::runOnOperation() {
             llvm::errs() << "Skipping non-function operation: " << op.getName() << "\n";
         }
     }
+
+    // Temporary dead code elimination (until this PR is merged: https://github.com/llvm/llvm-project/pull/99671)
+    bool clean = false;
+    while (!clean) {
+        clean = true;
+
+        module.walk([&](mlir::Operation* op) {
+            bool deadFunctionCall = mlir::isa<mlir::func::CallOp>(op) && op->use_empty(); // we assume for our use case that function calls have no side effects (BAD)
+            if (mlir::isOpTriviallyDead(op) || deadFunctionCall) {
+                clean = false;
+                op->erase();
+            }
+        });
+    }
 }
 
 llvm::LogicalResult EqualitySaturationPass::initialize(mlir::MLIRContext* context) {
@@ -246,7 +247,7 @@ llvm::LogicalResult EqualitySaturationPass::initialize(mlir::MLIRContext* contex
         if (!llvm::sys::fs::exists(eggFilePath)) {
             return llvm::failure();
         }
-        
+
         llvm::errs() << "Using default egg file: " << eggFilePath << "\n";
     }
 
