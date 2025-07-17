@@ -11,6 +11,7 @@ VERBOSE=false
 INPUT_FILE=""
 EGG_FILE=""
 OUTPUT_FILE=""
+BUILD_TYPE="Debug"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -26,6 +27,14 @@ while [[ $# -gt 0 ]]; do
             OUTPUT_FILE="$2"
             shift 2
             ;;
+        -d)
+            BUILD_TYPE="Debug"
+            shift
+            ;;
+        -r)
+            BUILD_TYPE="Release"
+            shift
+            ;;
         *)
             if [[ -z "$INPUT_FILE" ]]; then
                 INPUT_FILE="$1"
@@ -34,6 +43,8 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+BUILD_DIR="build-$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')"
 
 #### Validation
 if [[ -z "$INPUT_FILE" ]]; then
@@ -67,7 +78,7 @@ fi
 # if there is an egg file, add "--egg-file=<egg_file>", otherwise add nothing
 # if there is an output file, add "-o <output_file>", otherwise add nothing
 
-./build/egg-opt --eq-sat --canonicalize --cse "$INPUT_FILE" \
+./$BUILD_DIR/egg-opt --eq-sat --canonicalize --cse "$INPUT_FILE" \
     $(if $VERBOSE; then echo "--debug-only=dialegg"; fi) \
     $(if [[ -n "$EGG_FILE" ]]; then echo "--egg-file=$EGG_FILE"; fi) \
     $(if [[ -n "$OUTPUT_FILE" ]]; then echo "-o $OUTPUT_FILE"; fi)
