@@ -21,7 +21,7 @@ struct EqualitySaturationPass : public mlir::PassWrapper<EqualitySaturationPass,
 
     EgglogCustomDefs customFunctions;
 
-    std::map<std::string, EgglogOpDef> supportedOps;
+    std::map<std::string, EgglogOpDef, std::less<>> supportedOps;
     std::set<std::string> supportedDialects;
 
     double mlirToEgglogTime = 0.0;

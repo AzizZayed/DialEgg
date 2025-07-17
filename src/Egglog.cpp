@@ -1,6 +1,7 @@
 #include <regex>
 #include <chrono>
 #include <algorithm>
+#include <string_view>
 
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Debug.h"
@@ -21,26 +22,26 @@
 
 EgglogOpDef EgglogOpDef::parseOpFunction(const std::string& opStr) {
     std::string newOpStr = Egglog::removeComment(opStr);
-    std::vector<std::string> split = Egglog::splitExpression(newOpStr);
+    std::vector<std::string_view> split = Egglog::splitExpression(newOpStr);
     assert(split.size() > 0);
     assert(split[0] == "function");
 
     // check if the last element is "Op", otherwise the cost is the last element
     size_t cost = 1;
     if (split.back() != "Op") {
-        cost = std::stoll(split.back());
+        cost = svtoll(split.back());
         assert(split[split.size() - 3] == "Op");
     } else {
         assert(split.back() == "Op");
     }
 
-    std::string fullName = split[1]; // dialect_name_name_name_version or dialect_name_name_name
+    std::string_view fullName = split[1]; // dialect_name_name_name_version or dialect_name_name_name
 
     size_t firstUnderscore = fullName.find_first_of('_');
-    std::string dialect = fullName.substr(0, firstUnderscore);
+    std::string_view dialect = fullName.substr(0, firstUnderscore);
 
-    std::string version = "";
-    std::string name = fullName.substr(firstUnderscore + 1);
+    std::string_view version = "";
+    std::string_view name = fullName.substr(firstUnderscore + 1);
     if (fullName[fullName.size() - 2] == '_' && isdigit(fullName.back())) {
         size_t lastUnderscore = fullName.find_last_of('_');
         version = fullName.substr(lastUnderscore + 1);
@@ -51,13 +52,13 @@ EgglogOpDef EgglogOpDef::parseOpFunction(const std::string& opStr) {
                 << "Full Name: " << fullName << "\n"
                 << "Dialect: " << dialect << ", Name: " << name << ", Version: " << version << "\n");
 
-    std::vector<std::string> args = Egglog::splitExpression(split[2]);
+    std::vector<std::string_view> args = Egglog::splitExpression(split[2]);
 
     size_t nOperands = 0;
     size_t nAttributes = 0;
     size_t nRegions = 0;
     size_t nResults = 0;
-    for (const std::string& arg: args) {
+    for (std::string_view arg: args) {
         if (arg == "Op") {
             nOperands++;
         } else if (arg == "AttrPair") {
@@ -71,10 +72,10 @@ EgglogOpDef EgglogOpDef::parseOpFunction(const std::string& opStr) {
 
     return EgglogOpDef {
             .str = newOpStr,
-            .dialect = dialect,
-            .name = name,
-            .version = version,
-            .args = args,
+            .dialect = std::string(dialect),
+            .name = std::string(name),
+            .version = std::string(version),
+            .args = std::vector<std::string>(args.begin(), args.end()),
             .nOperands = nOperands,
             .nAttributes = nAttributes,
             .nRegions = nRegions,
@@ -91,7 +92,7 @@ bool EgglogOpDef::isOpFunction(const std::string& opStr) {
         return false;
     }
 
-    std::vector<std::string> split = Egglog::splitExpression(newOpStr);
+    std::vector<std::string_view> split = Egglog::splitExpression(newOpStr);
     return split.size() > 1 && split[0] == "function" && (split.back() == "Op" || split[split.size() - 3] == "Op");
 }
 
@@ -104,7 +105,7 @@ std::string Egglog::removeComment(const std::string& str) {
     return str;
 }
 
-std::vector<std::string> Egglog::splitExpression(std::string opStr) {
+std::vector<std::string_view> Egglog::splitExpression(std::string_view opStr) {
     // The expression must be surrounded by parentheses
     if (opStr.front() != '(' || opStr.back() != ')') {
         llvm::outs() << "Invalid expression: " << opStr << "\n";
@@ -112,8 +113,8 @@ std::vector<std::string> Egglog::splitExpression(std::string opStr) {
     }
 
     // split by whitespace that is not inside parentheses, square brackets, or quotes
-    std::vector<std::string> result;
-    std::stringstream ss;
+    std::vector<std::string_view> result;
+    size_t splitStart = 1;
 
     int openParentheses = 0;
     bool inQuotes = false;
@@ -130,26 +131,41 @@ std::vector<std::string> Egglog::splitExpression(std::string opStr) {
             inQuotes = !inQuotes;
         }
 
-        if (iswspace(c) && openParentheses == 0 && !inQuotes && !isBlank(ss.str())) {
-            result.push_back(ss.str());
-            ss.str("");
-        } else {
-            ss << c;
+        // if (iswspace(c) && openParentheses == 0 && !inQuotes && !isBlank(ss.str())) {
+        //     result.push_back(ss.str());
+        //     ss.str("");
+        // } else {
+        //     ss << c;
+        // }
+
+        if (iswspace(c) && openParentheses == 0 && !inQuotes && splitStart < i) {
+            std::string_view token = opStr.substr(splitStart, i - splitStart);
+            if (!isBlank(token)) {
+                result.push_back(token);
+                splitStart = i + 1;
+            }
         }
     }
 
-    if (!isBlank(ss.str())) {
-        result.push_back(ss.str());
+    // if (!isBlank(ss.str())) {
+    //     result.push_back(ss.str());
+    // }
+    
+    if (splitStart < opStr.size() - 1) {
+        std::string_view token = opStr.substr(splitStart, opStr.size() - splitStart - 1);
+        if (!isBlank(token)) {
+            result.push_back(token);
+        }
     }
 
     return result;
 }
 
 /** Parses the given type string into an MLIR type Form (F16) or (Complex <type>) */
-mlir::Type Egglog::parseType(std::string typeStr) {
-    std::vector<std::string> split = splitExpression(typeStr);
+mlir::Type Egglog::parseType(std::string_view typeStr) {
+    std::vector<std::string_view> split = splitExpression(typeStr);
 
-    std::string type = split[0];
+    std::string_view type = split[0];
     if (type == "F16") {
         return mlir::Float16Type::get(&context);
     } else if (type == "F32") {
@@ -173,11 +189,11 @@ mlir::Type Egglog::parseType(std::string typeStr) {
     } else if (type == "I64") {
         return mlir::IntegerType::get(&context, 64);
     } else if (type == "Int") {
-        return mlir::IntegerType::get(&context, std::stoll(split[1]), mlir::IntegerType::SignednessSemantics::Signless);
+        return mlir::IntegerType::get(&context, svtoll(split[1]), mlir::IntegerType::SignednessSemantics::Signless);
     } else if (type == "SInt") {
-        return mlir::IntegerType::get(&context, std::stoll(split[1]), mlir::IntegerType::SignednessSemantics::Signed);
+        return mlir::IntegerType::get(&context, svtoll(split[1]), mlir::IntegerType::SignednessSemantics::Signed);
     } else if (type == "UInt") {
-        return mlir::IntegerType::get(&context, std::stoll(split[1]), mlir::IntegerType::SignednessSemantics::Unsigned);
+        return mlir::IntegerType::get(&context, svtoll(split[1]), mlir::IntegerType::SignednessSemantics::Unsigned);
     } else if (type == "OtherInt") {
         return mlir::parseType(unwrap(split[1], '"'), &context);
     } else if (type == "Index") {
@@ -188,65 +204,65 @@ mlir::Type Egglog::parseType(std::string typeStr) {
         mlir::Type elementType = parseType(split[1]);
         return mlir::ComplexType::get(elementType);
     } else if (type == "Tuple") {  // (Tuple (vec-of <type1> <type2> ... <typeN>))
-        std::string typeVec = split[1];
+        std::string_view typeVec = split[1];
         std::vector<mlir::Type> types;
 
-        std::vector<std::string> typeSplit = splitExpression(typeVec);
+        std::vector<std::string_view> typeSplit = splitExpression(typeVec);
         for (size_t i = 1; i < typeSplit.size(); i++) {
             types.push_back(parseType(typeSplit[i]));
         }
 
         return mlir::TupleType::get(&context, types);
     } else if (type == "Vector") {
-        std::string dimVec = split[1];
-        std::string elementTypeStr = split[2];
+        std::string_view dimVec = split[1];
+        std::string_view elementTypeStr = split[2];
 
         std::vector<int64_t> dims;
-        std::vector<std::string> dimVecSplit = splitExpression(dimVec);
+        std::vector<std::string_view> dimVecSplit = splitExpression(dimVec);
         for (size_t i = 1; i < dimVecSplit.size(); i++) {
-            dims.push_back(std::stoll(dimVecSplit[i]));
+            dims.push_back(svtoll(dimVecSplit[i]));
         }
 
         mlir::Type elementType = parseType(elementTypeStr);
         return mlir::VectorType::get(dims, elementType);
     } else if (type == "RankedTensor") {
-        std::string dimVec = split[1];
-        std::string elementTypeStr = split[2];
+        std::string_view dimVec = split[1];
+        std::string_view elementTypeStr = split[2];
 
         std::vector<int64_t> dims;
-        std::vector<std::string> dimVecSplit = splitExpression(dimVec);
+        std::vector<std::string_view> dimVecSplit = splitExpression(dimVec);
         for (size_t i = 1; i < dimVecSplit.size(); i++) {
-            dims.push_back(std::stoll(dimVecSplit[i]));
+            dims.push_back(svtoll(dimVecSplit[i]));
         }
 
         mlir::Type elementType = parseType(elementTypeStr);
         return mlir::RankedTensorType::get(dims, elementType);
     } else if (type == "UnrankedTensor") {
-        std::string elementTypeStr = split[1];
+        std::string_view elementTypeStr = split[1];
         mlir::Type elementType = parseType(elementTypeStr);
         return mlir::UnrankedTensorType::get(elementType);
     } else if (type == "OpaqueType") {
         return mlir::parseType(unwrap(split[1], '"'), &context);
     } else if (type == "Function") {
-        std::string inputTypesStr = split[1];
-        std::string resultTypesStr = split[2];
+        std::string_view inputTypesStr = split[1];
+        std::string_view resultTypesStr = split[2];
 
         std::vector<mlir::Type> inputTypes;
         std::vector<mlir::Type> resultTypes;
 
-        std::vector<std::string> inputTypesSplit = splitExpression(inputTypesStr);
+        std::vector<std::string_view> inputTypesSplit = splitExpression(inputTypesStr);
         for (size_t i = 1; i < inputTypesSplit.size(); i++) {
             inputTypes.push_back(parseType(inputTypesSplit[i]));
         }
 
-        std::vector<std::string> resultTypesSplit = splitExpression(resultTypesStr);
+        std::vector<std::string_view> resultTypesSplit = splitExpression(resultTypesStr);
         for (size_t i = 1; i < resultTypesSplit.size(); i++) {
             resultTypes.push_back(parseType(resultTypesSplit[i]));
         }
 
         return mlir::FunctionType::get(&context, inputTypes, resultTypes);
     } else if (egglogCustom.typeParsers.find(type) != egglogCustom.typeParsers.end()) {
-        TypeParseFunction parseFunc = egglogCustom.typeParsers.at(type);
+        TypeParseFunction parseFunc = egglogCustom.typeParsers.find(type)->second;
         return parseFunc(split, *this);
     } else {
         llvm::outs() << "Unsupported type: " << type << "\n";
@@ -283,8 +299,8 @@ std::string Egglog::eggifyType(mlir::Type type) {
         ss << "(I32)";
     } else if (type.isInteger(64)) {
         ss << "(I64)";
-    } else if (isa<mlir::IntegerType>(type)) {
-        mlir::IntegerType intType = cast<mlir::IntegerType>(type);
+    } else if (mlir::isa<mlir::IntegerType>(type)) {
+        mlir::IntegerType intType = mlir::cast<mlir::IntegerType>(type);
         size_t width = intType.getWidth();
 
         if (intType.isSignless()) {
@@ -298,26 +314,26 @@ std::string Egglog::eggifyType(mlir::Type type) {
         }
     } else if (type.isIndex()) {
         ss << "(Index)";
-    } else if (isa<mlir::NoneType>(type)) {
+    } else if (mlir::isa<mlir::NoneType>(type)) {
         ss << "(None)";
-    } else if (isa<mlir::ComplexType>(type)) {
-        ss << "(Complex " << cast<mlir::ComplexType>(type).getElementType() << ")";
-    } else if (isa<mlir::TupleType>(type)) {
-        mlir::TupleType tupleType = cast<mlir::TupleType>(type);
+    } else if (mlir::isa<mlir::ComplexType>(type)) {
+        ss << "(Complex " << mlir::cast<mlir::ComplexType>(type).getElementType() << ")";
+    } else if (mlir::isa<mlir::TupleType>(type)) {
+        mlir::TupleType tupleType = mlir::cast<mlir::TupleType>(type);
         ss << "(TupleType (";
         for (mlir::Type element: tupleType.getTypes()) {
             ss << " " << eggifyType(element);
         }
         ss << "))";
-    } else if (isa<mlir::VectorType>(type)) {
-        mlir::VectorType vectorType = cast<mlir::VectorType>(type);
+    } else if (mlir::isa<mlir::VectorType>(type)) {
+        mlir::VectorType vectorType = mlir::cast<mlir::VectorType>(type);
         ss << "(Vector (vec-of";
         for (int64_t dim: vectorType.getShape()) {
             ss << " " << dim;
         }
         ss << ") " << eggifyType(vectorType.getElementType()) << ")";
-    } else if (isa<mlir::RankedTensorType>(type)) {
-        mlir::RankedTensorType tensorType = cast<mlir::RankedTensorType>(type);
+    } else if (mlir::isa<mlir::RankedTensorType>(type)) {
+        mlir::RankedTensorType tensorType = mlir::cast<mlir::RankedTensorType>(type);
         llvm::ArrayRef<int64_t> shape = tensorType.getShape();
         mlir::Type elementType = tensorType.getElementType();
 
@@ -326,8 +342,8 @@ std::string Egglog::eggifyType(mlir::Type type) {
             ss << " " << dim;
         }
         ss << ") " << eggifyType(elementType) << ")";
-    } else if (isa<mlir::UnrankedTensorType>(type)) {
-        mlir::UnrankedTensorType tensorType = cast<mlir::UnrankedTensorType>(type);
+    } else if (mlir::isa<mlir::UnrankedTensorType>(type)) {
+        mlir::UnrankedTensorType tensorType = mlir::cast<mlir::UnrankedTensorType>(type);
         mlir::Type elementType = tensorType.getElementType();
 
         ss << "(UnrankedTensor " << eggifyType(elementType) << ")";
@@ -341,8 +357,8 @@ std::string Egglog::eggifyType(mlir::Type type) {
             ss << " " << split[i];
         }
         ss << ")";
-    } else if (isa<mlir::FunctionType>(type)) {
-        mlir::FunctionType functionType = cast<mlir::FunctionType>(type);
+    } else if (mlir::isa<mlir::FunctionType>(type)) {
+        mlir::FunctionType functionType = mlir::cast<mlir::FunctionType>(type);
         llvm::ArrayRef<mlir::Type> inputTypes = functionType.getInputs();
         llvm::ArrayRef<mlir::Type> resultTypes = functionType.getResults();
 
@@ -364,8 +380,8 @@ std::string Egglog::eggifyType(mlir::Type type) {
 }
 
 /** Parses the given attribute string into an MLIR named attribute. Form (NamedAttr "<name>" <attr>) */
-mlir::NamedAttribute Egglog::parseNamedAttribute(const std::string& attrStr) {
-    std::vector<std::string> split = splitExpression(attrStr);
+mlir::NamedAttribute Egglog::parseNamedAttribute(std::string_view attrStr) {
+    std::vector<std::string_view> split = splitExpression(attrStr);
 
     mlir::StringAttr attrName = mlir::StringAttr::get(&context, unwrap(split[1], '"'));
     mlir::Attribute attr = parseAttribute(split[2]);
@@ -383,14 +399,14 @@ std::string Egglog::eggifyNamedAttribute(mlir::NamedAttribute namedAttr) {
 }
 
 /** Parses the given attribute string into an MLIR attribute. Form (<type> <arg1> <arg2> ... <argN>) */
-mlir::Attribute Egglog::parseAttribute(const std::string& attrStr) {
-    std::vector<std::string> split = splitExpression(attrStr);
+mlir::Attribute Egglog::parseAttribute(std::string_view attrStr) {
+    std::vector<std::string_view> split = splitExpression(attrStr);
 
-    std::string attrType = split[0];
+    std::string_view attrType = split[0];
     if (attrType == "IntegerAttr") {
-        return mlir::IntegerAttr::get(parseType(split[2]), std::stoll(split[1]));
+        return mlir::IntegerAttr::get(parseType(split[2]), svtoll(split[1]));
     } else if (attrType == "FloatAttr") {
-        return mlir::FloatAttr::get(parseType(split[2]), std::stod(split[1]));
+        return mlir::FloatAttr::get(parseType(split[2]), svtod(split[1]));
     } else if (attrType == "StringAttr") {
         return mlir::parseAttribute(split[1], &context);
     } else if (attrType == "UnitAttr") {
@@ -399,48 +415,42 @@ mlir::Attribute Egglog::parseAttribute(const std::string& attrStr) {
         return mlir::TypeAttr::get(parseType(split[1]));
     } else if (attrType == "ArrayAttr") {  // (ArrayAttr (vec-of <attr1> <attr2> ... <attrN>))
         std::vector<mlir::Attribute> elements;
-        std::vector<std::string> arraySplit = splitExpression(split[1]);
+        std::vector<std::string_view> arraySplit = splitExpression(split[1]);
         for (size_t i = 1; i < arraySplit.size(); i++) {
             elements.push_back(parseAttribute(arraySplit[i]));
         }
         return mlir::ArrayAttr::get(&context, elements);
     } else if (attrType == "DenseIntArrayAttr") {  // (DenseIntArrayAttr N (vec-of <int1> <int2> ... <intN>) <type>)
-        int64_t size = std::stoll(split[1]);
+        int64_t size = svtoll(split[1]);
         std::vector<int64_t> values;
-        std::vector<std::string> arraySplit = splitExpression(split[2]);
+        std::vector<std::string_view> arraySplit = splitExpression(split[2]);
         for (size_t i = 1; i < arraySplit.size(); i++) {
-            values.push_back(std::stoll(arraySplit[i]));
+            values.push_back(svtoll(arraySplit[i]));
         }
         mlir::Type type = parseType(split[3]);
         size_t byteWidth = std::max(1u, type.getIntOrFloatBitWidth() / 8);
         return mlir::DenseArrayAttr::get(&context, type, size, llvm::ArrayRef<char>(reinterpret_cast<const char*>(values.data()), values.size() * byteWidth));
     } else if (attrType == "DenseFloatArrayAttr") {  // (DenseFloatArrayAttr N (vec-of <float1> <float2> ... <floatN>) <type>)
-        int64_t size = std::stoll(split[1]);
+        int64_t size = svtoll(split[1]);
         std::vector<double> values;
-        std::vector<std::string> arraySplit = splitExpression(split[2]);
+        std::vector<std::string_view> arraySplit = splitExpression(split[2]);
         for (size_t i = 1; i < arraySplit.size(); i++) {
-            values.push_back(std::stod(arraySplit[i]));
+            values.push_back(svtod(arraySplit[i]));
         }
         mlir::Type type = parseType(split[3]);
         return mlir::DenseArrayAttr::get(&context, type, size, llvm::ArrayRef<char>(reinterpret_cast<const char*>(values.data()), values.size() * sizeof(double)));
     } else if (attrType == "DenseIntElementsAttr") {  // (DenseIntElementsAttr (vec-of <int1> <int2> ... <intN>) <type>)
         mlir::Type type = parseType(split[2]);
-        mlir::ShapedType shapedType = cast<mlir::ShapedType>(type);
+        mlir::ShapedType shapedType = mlir::cast<mlir::ShapedType>(type);
 
         if (shapedType.getElementType().isInteger(32)) {  // (DenseIntElementsAttr (vec-of <int1> <int2> ... <intN>) I32)
-            llvm::SmallVector<int32_t, 4> values = parseVector<int32_t, 4>(split[1]);
+            llvm::SmallVector<int32_t, 4> values = parseVector<int32_t, 4>(split[1], svtoi);
             return mlir::DenseIntElementsAttr::get(shapedType, values);
         } else if (shapedType.getElementType().isInteger(64)) {  // (DenseIntElementsAttr (vec-of <int1> <int2> ... <intN>) I64)
-            llvm::SmallVector<int64_t, 4> values = parseVector<int64_t, 4>(split[1]);
+            llvm::SmallVector<int64_t, 4> values = parseVector<int64_t, 4>(split[1], svtoll);
             return mlir::DenseIntElementsAttr::get(shapedType, values);
         } else if (shapedType.getElementType().isInteger(1)) {  // (DenseIntElementsAttr (vec-of <int1> <int2> ... <intN>) I1)
-            llvm::SmallVector<bool, 4> values = parseVector<bool, 4>(split[1]);
-            return mlir::DenseIntElementsAttr::get(shapedType, values);
-        } else if (shapedType.getElementType().isInteger(8)) {  // (DenseIntElementsAttr (vec-of <int1> <int2> ... <intN>) I8)
-            llvm::SmallVector<int8_t, 4> values = parseVector<int8_t, 4>(split[1]);
-            return mlir::DenseIntElementsAttr::get(shapedType, values);
-        } else if (shapedType.getElementType().isInteger(16)) {  // (DenseIntElementsAttr (vec-of <int1> <int2> ... <intN>) I16)
-            llvm::SmallVector<int16_t, 4> values = parseVector<int16_t, 4>(split[1]);
+            llvm::SmallVector<bool, 4> values = parseVector<bool, 4>(split[1], svtob);
             return mlir::DenseIntElementsAttr::get(shapedType, values);
         } else {
             llvm::outs() << "Unsupported DenseIntElementsAttr type: " << shapedType.getElementType() << "\n";
@@ -448,13 +458,13 @@ mlir::Attribute Egglog::parseAttribute(const std::string& attrStr) {
         }
     } else if (attrType == "DenseFPElementsAttr") {  // (DenseFloatElementsAttr (vec-of <float1> <float2> ... <floatN>) <type>)
         mlir::Type type = parseType(split[2]);
-        mlir::ShapedType shapedType = cast<mlir::ShapedType>(type);
+        mlir::ShapedType shapedType = mlir::cast<mlir::ShapedType>(type);
 
         if (shapedType.getElementType().isF32()) {  // (DenseFloatElementsAttr (vec-of <float1> <float2> ... <floatN>) F32)
-            llvm::SmallVector<float, 4> values = parseVector<float, 4>(split[1]);
+            llvm::SmallVector<float, 4> values = parseVector<float, 4>(split[1], svtof);
             return mlir::DenseFPElementsAttr::get(shapedType, values);
         } else if (shapedType.getElementType().isF64()) {  // (DenseFloatElementsAttr (vec-of <float1> <float2> ... <floatN>) F64)
-            llvm::SmallVector<double, 4> values = parseVector<double, 4>(split[1]);
+            llvm::SmallVector<double, 4> values = parseVector<double, 4>(split[1], svtod);
             return mlir::DenseFPElementsAttr::get(shapedType, values);
         } else {
             llvm::outs() << "Unsupported DenseFPElementsAttr type: " << shapedType.getElementType() << "\n";
@@ -463,24 +473,24 @@ mlir::Attribute Egglog::parseAttribute(const std::string& attrStr) {
     } else if (attrType == "SymbolRefAttr") {  // (SymbolRefAttr "<name>")
         return mlir::SymbolRefAttr::get(&context, unwrap(split[1], '"'));
     } else if (attrType == "PrecisionAttr") {  // (PrecisionAttr (DEFAULT | HIGH | HIGHEST))
-        std::string precisionStr = unwrapBrackets(split[1]);
+        std::string_view precisionStr = unwrapBrackets(split[1]);
         mlir::stablehlo::Precision precision = mlir::stablehlo::symbolizePrecision(precisionStr).value();
         return mlir::stablehlo::PrecisionAttr::get(&context, precision);
     } else if (attrType == "ComparisonDirectionAttr") {  // (ComparisonDirectionAttr (EQ | NE | LT | LE | GT | GE))
-        std::string directionStr = unwrapBrackets(split[1]);
+        std::string_view directionStr = unwrapBrackets(split[1]);
         mlir::stablehlo::ComparisonDirection direction = mlir::stablehlo::symbolizeComparisonDirection(directionStr).value();
         return mlir::stablehlo::ComparisonDirectionAttr::get(&context, direction);
     } else if (attrType == "ComparisonTypeAttr") { // (ComparisonTypeAttr (NOTYPE | FLOAT | TOTALORDER | SIGNED | UNSIGNED))
-        std::string typeStr = unwrapBrackets(split[1]);
+        std::string_view typeStr = unwrapBrackets(split[1]);
         mlir::stablehlo::ComparisonType type = mlir::stablehlo::symbolizeComparisonType(typeStr).value();
         return mlir::stablehlo::ComparisonTypeAttr::get(&context, type);
     } else if (attrType == "DotAlgorithmAttr") {  // (DotAlgorithmAttr <type1> <type2> <type3> <int1> <int2> <int3> <bool>)
         mlir::Type type1 = parseType(split[1]);
         mlir::Type type2 = parseType(split[2]);
         mlir::Type type3 = parseType(split[3]);
-        int64_t int1 = std::stoll(split[4]);
-        int64_t int2 = std::stoll(split[5]);
-        int64_t int3 = std::stoll(split[6]);
+        int64_t int1 = svtoll(split[4]);
+        int64_t int2 = svtoll(split[5]);
+        int64_t int3 = svtoll(split[6]);
         return mlir::stablehlo::DotAlgorithmAttr::get(&context, type1, type2, type3, int1, int2, int3, split[7] == "true");
     } else if (attrType == "DotDimensionNumbersAttr") { // (DotDimensionNumbersAttr <intvec> <intvec> <intvec> <intvec>)
         std::vector<int64_t> lhsBatchingDimensions;
@@ -488,31 +498,31 @@ mlir::Attribute Egglog::parseAttribute(const std::string& attrStr) {
         std::vector<int64_t> lhsContractingDimensions;
         std::vector<int64_t> rhsContractingDimensions;
 
-        std::vector<std::string> lhsBatchingSplit = splitExpression(split[1]);
+        std::vector<std::string_view> lhsBatchingSplit = splitExpression(split[1]);
         for (size_t i = 1; i < lhsBatchingSplit.size(); i++) {
-            lhsBatchingDimensions.push_back(std::stoll(lhsBatchingSplit[i]));
+            lhsBatchingDimensions.push_back(svtoll(lhsBatchingSplit[i]));
         }
 
-        std::vector<std::string> rhsBatchingSplit = splitExpression(split[2]);
+        std::vector<std::string_view> rhsBatchingSplit = splitExpression(split[2]);
         for (size_t i = 1; i < rhsBatchingSplit.size(); i++) {
-            rhsBatchingDimensions.push_back(std::stoll(rhsBatchingSplit[i]));
+            rhsBatchingDimensions.push_back(svtoll(rhsBatchingSplit[i]));
         }
 
-        std::vector<std::string> lhsContractingSplit = splitExpression(split[3]);
+        std::vector<std::string_view> lhsContractingSplit = splitExpression(split[3]);
         for (size_t i = 1; i < lhsContractingSplit.size(); i++) {
-            lhsContractingDimensions.push_back(std::stoll(lhsContractingSplit[i]));
+            lhsContractingDimensions.push_back(svtoll(lhsContractingSplit[i]));
         }
 
-        std::vector<std::string> rhsContractingSplit = splitExpression(split[4]);
+        std::vector<std::string_view> rhsContractingSplit = splitExpression(split[4]);
         for (size_t i = 1; i < rhsContractingSplit.size(); i++) {
-            rhsContractingDimensions.push_back(std::stoll(rhsContractingSplit[i]));
+            rhsContractingDimensions.push_back(svtoll(rhsContractingSplit[i]));
         }
 
         return mlir::stablehlo::DotDimensionNumbersAttr::get(&context, lhsBatchingDimensions, rhsBatchingDimensions, lhsContractingDimensions, rhsContractingDimensions);
     } else if (attrType == "OpaqueAttr") {  // TODO add all remaining builtin attrs (check below functions)
         return mlir::parseAttribute(unwrap(split[1], '"'), &context);
     } else if (egglogCustom.attrParsers.find(attrType) != egglogCustom.attrParsers.end()) {
-        AttrParseFunction parseFunc = egglogCustom.attrParsers.at(attrType);
+        AttrParseFunction parseFunc = egglogCustom.attrParsers.find(attrType)->second;
         return parseFunc(split, *this);
     } else {
         llvm::outs() << "Unsupported attribute type: " << attrType << "\n";
@@ -521,11 +531,11 @@ mlir::Attribute Egglog::parseAttribute(const std::string& attrStr) {
 }
 
 template<typename T, size_t N>
-llvm::SmallVector<T, N> Egglog::parseVector(const std::string& vecStr) {
+llvm::SmallVector<T, N> Egglog::parseVector(std::string_view vecStr, std::function<T(std::string_view)> svto) {
     llvm::SmallVector<T, N> result;
-    std::vector<std::string> vecSplit = splitExpression(vecStr);
+    std::vector<std::string_view> vecSplit = splitExpression(vecStr);
     for (size_t i = 1; i < vecSplit.size(); i++) {
-        result.push_back(convertFromString<T>(vecSplit[i]));
+        result.push_back(svto(vecSplit[i]));
     }
     return result;
 }
@@ -537,22 +547,22 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
     mlir::TypeID typeId = attr.getTypeID();
     std::string typeName = attr.getAbstractAttribute().getName().str();
     if (typeId == mlir::TypeID::get<mlir::IntegerAttr>()) {  // (IntegerAttr <int> <type>)
-        mlir::IntegerAttr integerAttr = cast<mlir::IntegerAttr>(attr);
+        mlir::IntegerAttr integerAttr = mlir::cast<mlir::IntegerAttr>(attr);
         int64_t value = integerAttr.getInt();
         ss << "(IntegerAttr " << value << " " << eggifyType(integerAttr.getType()) << ")";
 
     } else if (typeId == mlir::TypeID::get<mlir::FloatAttr>()) {  // (FloatAttr <float> <type>)
-        mlir::FloatAttr floatAttr = cast<mlir::FloatAttr>(attr);
+        mlir::FloatAttr floatAttr = mlir::cast<mlir::FloatAttr>(attr);
         double value = floatAttr.getValueAsDouble();
         ss << "(FloatAttr " << doubleToString(value) << " " << eggifyType(floatAttr.getType()) << ")";
 
     } else if (typeId == mlir::TypeID::get<mlir::StringAttr>()) {  // (StringAttr "<string>">)
-        mlir::StringAttr stringAttr = cast<mlir::StringAttr>(attr);
+        mlir::StringAttr stringAttr = mlir::cast<mlir::StringAttr>(attr);
         std::string value = stringAttr.getValue().str();
         ss << "(StringAttr \"" << value << "\")";
 
     } else if (typeId == mlir::TypeID::get<mlir::ArrayAttr>()) {  // (ArrayAttr (vec-of <attr1> <attr2> ... <attrN>))
-        mlir::ArrayAttr arrayAttr = cast<mlir::ArrayAttr>(attr);
+        mlir::ArrayAttr arrayAttr = mlir::cast<mlir::ArrayAttr>(attr);
         ss << "(ArrayAttr (";
 
         if (arrayAttr.empty()) {
@@ -566,7 +576,7 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         ss << "))";
 
     } else if (typeId == mlir::TypeID::get<mlir::TypeAttr>()) {  // (TypeAttr "<type>")
-        mlir::TypeAttr typeAttr = cast<mlir::TypeAttr>(attr);
+        mlir::TypeAttr typeAttr = mlir::cast<mlir::TypeAttr>(attr);
         mlir::Type type = typeAttr.getValue();
         ss << "(TypeAttr " << eggifyType(type) << ")";
 
@@ -574,7 +584,7 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         ss << "(UnitAttr)";
 
     } else if (typeId == mlir::TypeID::get<mlir::DenseArrayAttr>()) {
-        mlir::DenseArrayAttr denseArrayAttr = cast<mlir::DenseArrayAttr>(attr);
+        mlir::DenseArrayAttr denseArrayAttr = mlir::cast<mlir::DenseArrayAttr>(attr);
         llvm::ArrayRef<char> rawData = denseArrayAttr.getRawData();
         mlir::Type elementType = denseArrayAttr.getElementType();
         size_t size = denseArrayAttr.size();
@@ -582,7 +592,7 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         // if Int type, then it is a DenseIntArrayAttr
         // if Float type, then it is a DenseFloatArrayAttr
 
-        if (isa<mlir::IntegerType>(elementType)) {
+        if (mlir::isa<mlir::IntegerType>(elementType)) {
             if (elementType.isInteger(64)) {
                 llvm::ArrayRef<int64_t> values(reinterpret_cast<const int64_t*>(rawData.data()), size);
                 ss << "(DenseIntArrayAttr " << size << " ";
@@ -604,7 +614,7 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
                 ss << "(DenseIntArrayAttr " << size << " ";
                 eggifyIterable<bool>(ss, values);
             }
-        } else if (isa<mlir::FloatType>(elementType)) {
+        } else if (mlir::isa<mlir::FloatType>(elementType)) {
             llvm::ArrayRef<double> values(reinterpret_cast<const double*>(rawData.data()), size);
             ss << "(DenseFloatArrayAttr " << size;
             eggifyIterable<double>(ss, values);
@@ -612,7 +622,7 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
 
         ss << " " << eggifyType(elementType) << ")";
     } else if (typeId == mlir::TypeID::get<mlir::DenseIntOrFPElementsAttr>()) {
-        mlir::DenseIntOrFPElementsAttr denseIntOrFPAttr = cast<mlir::DenseIntOrFPElementsAttr>(attr);
+        mlir::DenseIntOrFPElementsAttr denseIntOrFPAttr = mlir::cast<mlir::DenseIntOrFPElementsAttr>(attr);
         mlir::Type elementType = denseIntOrFPAttr.getElementType();
         mlir::ShapedType shapedType = denseIntOrFPAttr.getType();
 
@@ -657,20 +667,20 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         }
 
     } else if (typeId == mlir::TypeID::get<mlir::SymbolRefAttr>()) {  // (SymbolRefAttr "<name>")
-        mlir::SymbolRefAttr symbolRefAttr = cast<mlir::SymbolRefAttr>(attr);
+        mlir::SymbolRefAttr symbolRefAttr = mlir::cast<mlir::SymbolRefAttr>(attr);
         std::string value = symbolRefAttr.getRootReference().str();
         ss << "(SymbolRefAttr \"" << value << "\")";
     } else if (typeId == mlir::TypeID::get<mlir::stablehlo::ComparisonDirectionAttr>()) {  
-        mlir::stablehlo::ComparisonDirectionAttr comparisonDirectionAttr = cast<mlir::stablehlo::ComparisonDirectionAttr>(attr);
+        mlir::stablehlo::ComparisonDirectionAttr comparisonDirectionAttr = mlir::cast<mlir::stablehlo::ComparisonDirectionAttr>(attr);
         ss << "(ComparisonDirectionAttr (" << mlir::stablehlo::stringifyComparisonDirection(comparisonDirectionAttr.getValue()) << "))";
     } else if (typeId == mlir::TypeID::get<mlir::stablehlo::ComparisonTypeAttr>()) {  // (ComparisonTypeAttr <type>)
-        mlir::stablehlo::ComparisonTypeAttr comparisonTypeAttr = cast<mlir::stablehlo::ComparisonTypeAttr>(attr);
+        mlir::stablehlo::ComparisonTypeAttr comparisonTypeAttr = mlir::cast<mlir::stablehlo::ComparisonTypeAttr>(attr);
         ss << "(ComparisonTypeAttr (" << mlir::stablehlo::stringifyComparisonType(comparisonTypeAttr.getValue()) << "))";
     } else if (typeId == mlir::TypeID::get<mlir::stablehlo::PrecisionAttr>()) {  // (PrecisionAttr <type>)
-        mlir::stablehlo::PrecisionAttr precisionAttr = cast<mlir::stablehlo::PrecisionAttr>(attr);
+        mlir::stablehlo::PrecisionAttr precisionAttr = mlir::cast<mlir::stablehlo::PrecisionAttr>(attr);
         ss << "(PrecisionAttr (" << mlir::stablehlo::stringifyPrecision(precisionAttr.getValue()) << "))";
     } else if (typeId == mlir::TypeID::get<mlir::stablehlo::DotAlgorithmAttr>()) {
-        mlir::stablehlo::DotAlgorithmAttr dotAlgorithmAttr = cast<mlir::stablehlo::DotAlgorithmAttr>(attr);
+        mlir::stablehlo::DotAlgorithmAttr dotAlgorithmAttr = mlir::cast<mlir::stablehlo::DotAlgorithmAttr>(attr);
         ss << "(DotAlgorithmAttr ";
         ss << eggifyType(dotAlgorithmAttr.getLhsPrecisionType()) << " ";
         ss << eggifyType(dotAlgorithmAttr.getRhsPrecisionType()) << " ";
@@ -680,7 +690,7 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         ss << dotAlgorithmAttr.getNumPrimitiveOperations() << " ";
         ss << (dotAlgorithmAttr.getAllowImpreciseAccumulation() ? "true" : "false") << ")";
     } else if (typeId == mlir::TypeID::get<mlir::stablehlo::DotDimensionNumbersAttr>()) {
-        mlir::stablehlo::DotDimensionNumbersAttr dotDimAttr = cast<mlir::stablehlo::DotDimensionNumbersAttr>(attr);
+        mlir::stablehlo::DotDimensionNumbersAttr dotDimAttr = mlir::cast<mlir::stablehlo::DotDimensionNumbersAttr>(attr);
         ss << "(DotDimensionNumbersAttr (vec-of";
         for (int64_t dim: dotDimAttr.getLhsBatchingDimensions()) {
             ss << " " << dim;
@@ -745,11 +755,11 @@ void Egglog::eggifyIterable(llvm::raw_string_ostream& ss, U range) {
     ss << ")";
 }
 
-mlir::Value Egglog::parseValue(const std::string& valueStr) {
-    std::vector<std::string> split = splitExpression(valueStr);
+mlir::Value Egglog::parseValue(std::string_view valueStr) {
+    std::vector<std::string_view> split = splitExpression(valueStr);
     assert(split[0] == "Value");
 
-    size_t id = std::stoll(split[1]);
+    size_t id = svtoll(split[1]);
     EggifiedOp* eggifiedOp = findEggifiedOp(id);
     if (eggifiedOp == nullptr) {
         llvm::outs() << "Value " << id << " not found\n";
@@ -759,10 +769,10 @@ mlir::Value Egglog::parseValue(const std::string& valueStr) {
     return eggifiedOp->mlirValues[0];
 }
 
-mlir::Operation* Egglog::parseOperation(const std::string& newOpStr, mlir::OpBuilder& builder) {
+mlir::Operation* Egglog::parseOperation(std::string_view newOpStr, mlir::OpBuilder& builder) {
     // llvm::outs() << "PARSING OPERATION: " << newOpStr << "\n";
-    std::vector<std::string> split = splitExpression(newOpStr);
-    std::string opName = split[0];
+    std::vector<std::string_view> split = splitExpression(newOpStr);
+    std::string_view opName = split[0];
 
     if (opName == "Value") {  // If it's am opaque op, no operation to parse
         return nullptr;
@@ -772,12 +782,13 @@ mlir::Operation* Egglog::parseOperation(const std::string& newOpStr, mlir::OpBui
         return parsedOps[newOpStr];
     }
 
-    if (supportedEgglogOps.find(opName) == supportedEgglogOps.end()) {  // unsupported operation
+    auto it = supportedEgglogOps.find(opName);
+    if (it == supportedEgglogOps.end()) {  // unsupported operation
         llvm::outs() << "Unsupported operation '" << opName << "'.\n";
         exit(1);
     }
 
-    EgglogOpDef egglogOpDef = supportedEgglogOps.at(opName);
+    EgglogOpDef egglogOpDef = it->second;
     std::string mlirOpName = egglogOpDef.mlirName();
 
     size_t index = 0;
@@ -785,7 +796,7 @@ mlir::Operation* Egglog::parseOperation(const std::string& newOpStr, mlir::OpBui
     // Operands
     std::vector<mlir::Value> operands;
     for (size_t i = 0; i < egglogOpDef.nOperands; i++, index++) {
-        std::string operandStr = split[index + 1];  // get the operand string
+        std::string_view operandStr = split[index + 1];  // get the operand string
 
         if (operandStr.find("(Value ") == 0) {
             mlir::Value operand = parseValue(operandStr);
@@ -849,12 +860,12 @@ mlir::Operation* Egglog::parseOperation(const std::string& newOpStr, mlir::OpBui
     return newOp;
 }
 
-std::vector<mlir::Block*> Egglog::parseBlocksFromRegion(const std::string& regionStr, mlir::OpBuilder& builder) {
-    std::vector<std::string> split = splitExpression(regionStr);
+std::vector<mlir::Block*> Egglog::parseBlocksFromRegion(std::string_view regionStr, mlir::OpBuilder& builder) {
+    std::vector<std::string_view> split = splitExpression(regionStr);
     assert(split[0] == "Reg");
 
-    std::string blockVecStr = split[1];
-    std::vector<std::string> blockStrs = splitExpression(blockVecStr);
+    std::string_view blockVecStr = split[1];
+    std::vector<std::string_view> blockStrs = splitExpression(blockVecStr);
 
     std::vector<mlir::Block*> blocks;
     for (size_t i = 1; i < blockStrs.size(); i++) {
@@ -865,12 +876,12 @@ std::vector<mlir::Block*> Egglog::parseBlocksFromRegion(const std::string& regio
     return blocks;
 }
 
-mlir::Block* Egglog::parseBlock(const std::string& blockStr, mlir::OpBuilder& builder) {
-    std::vector<std::string> split = splitExpression(blockStr);
+mlir::Block* Egglog::parseBlock(std::string_view blockStr, mlir::OpBuilder& builder) {
+    std::vector<std::string_view> split = splitExpression(blockStr);
     assert(split[0] == "Blk");
 
-    std::string opVecStr = split[1];
-    std::vector<std::string> opStrs = splitExpression(opVecStr);
+    std::string_view opVecStr = split[1];
+    std::vector<std::string_view> opStrs = splitExpression(opVecStr);
 
     mlir::Block* block = new mlir::Block();
     for (size_t i = 1; i < opStrs.size(); i++) {

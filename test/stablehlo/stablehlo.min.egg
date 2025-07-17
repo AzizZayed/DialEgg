@@ -22,6 +22,7 @@
 (function stablehlo_concatenate_3 (Op Op Op AttrPair Type) Op)
 (function stablehlo_concatenate_4 (Op Op Op Op AttrPair Type) Op)
 (function stablehlo_concatenate_5 (Op Op Op Op Op AttrPair Type) Op)
+(function stablehlo_constant (AttrPair Type) Op)
 (function stablehlo_convolution (Op Op AttrPair AttrPair AttrPair AttrPair AttrPair AttrPair AttrPair AttrPair AttrPair Type) Op)
 (function stablehlo_dot_general (Op Op AttrPair AttrPair Type) Op)
 (function stablehlo_gather (Op Op AttrPair AttrPair AttrPair Type) Op)

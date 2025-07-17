@@ -141,6 +141,7 @@ void EqualitySaturationPass::runOnBlock(mlir::Block& block, const std::string& b
     std::ifstream file(egglogExtractedFilename);
 
     // Parse the extracted egglog file and replace the MLIR operations
+    std::vector<std::string> lines;
     for (const EggifiedOp* eggOp: egglog.eggifiedBlock) {
         if (!eggOp->shouldBeExtracted()) {
             continue;
@@ -148,17 +149,17 @@ void EqualitySaturationPass::runOnBlock(mlir::Block& block, const std::string& b
 
         // eggOp.print(llvm::outs());
 
-        std::string line;
-        std::getline(file, line);
+        lines.emplace_back();
+        std::getline(file, lines.back());
 
         // llvm::outs() << eggOp.getPrintId() << " = " << line << "\n";
 
         mlir::Operation* prevOp = eggOp->mlirOp;
         mlir::OpBuilder builder(prevOp);
-        mlir::Operation* newOp = egglog.parseOperation(line, builder);
+        mlir::Operation* newOp = egglog.parseOperation(lines.back(), builder);
 
         if (newOp == nullptr) {  // If the operation is an opaque value, replace it with the value
-            mlir::Value value = egglog.parseValue(line);
+            mlir::Value value = egglog.parseValue(lines.back());
             prevOp->getResult(0).replaceAllUsesWith(value);
             prevOp->erase();
         } else if (newOp != prevOp) {  // Check if the whole operation is different, if so, replace it

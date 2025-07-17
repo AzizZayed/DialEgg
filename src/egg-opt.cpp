@@ -42,14 +42,14 @@ int main(int argc, char** argv) {
     mlir::stablehlo::registerStablehloLinalgTransformsPasses();
     mlir::PassRegistration<EggifyPass>();
 
-    std::map<std::string, AttrStringifyFunction> attrStringifiers = {
+    std::map<std::string, AttrStringifyFunction, std::less<>> attrStringifiers = {
             {mlir::arith::FastMathFlagsAttr::name.str(), stringifyFastMathFlagsAttr}};
-    std::map<std::string, AttrParseFunction> attrParsers = {
+    std::map<std::string, AttrParseFunction, std::less<>> attrParsers = {
             {"arith_fastmath", parseFastMathFlagsAttr}};
 
-    std::map<std::string, TypeStringifyFunction> typeStringifiers = {
+    std::map<std::string, TypeStringifyFunction, std::less<>> typeStringifiers = {
             {mlir::RankedTensorType::name.str(), stringifyRankedTensorType}};
-    std::map<std::string, TypeParseFunction> typeParsers = {
+    std::map<std::string, TypeParseFunction, std::less<>> typeParsers = {
             {"RankedTensor", parseRankedTensorType}};
 
     EgglogCustomDefs funcs = {attrStringifiers, attrParsers, typeStringifiers, typeParsers};

@@ -12,37 +12,23 @@
 #include "mlir/IR/Operation.h"
 #include "mlir/IR/Value.h"
 
-template<typename T>
-inline T convertFromString(const std::string& str);
-
-// specializations
-template<>
-inline double convertFromString<double>(const std::string& str) {
-    return std::stod(str);
+inline long long svtoll(std::string_view str) {
+    return std::stoll(std::string(str));
 }
 
-template<>
-inline float convertFromString<float>(const std::string& str) {
-    return std::stof(str);
+inline int svtoi(std::string_view str) {
+    return std::stoi(std::string(str));
 }
 
-template<>
-inline int32_t convertFromString<int32_t>(const std::string& str) {
-    return std::stoi(str);
+inline double svtod(std::string_view str) {
+    return std::stod(std::string(str));
 }
 
-template<>
-inline int16_t convertFromString<int16_t>(const std::string& str) {
-    return static_cast<int16_t>(std::stoi(str));
+inline float svtof(std::string_view str) {
+    return std::stof(std::string(str));
 }
 
-template<>
-inline int8_t convertFromString<int8_t>(const std::string& str) {
-    return static_cast<int8_t>(std::stoi(str));
-}
-
-template<>
-inline bool convertFromString<bool>(const std::string& str) {
+inline bool svtob(std::string_view str) {
     if (str == "true" || str == "1") {
         return true;
     } else if (str == "false" || str == "0") {
@@ -51,11 +37,6 @@ inline bool convertFromString<bool>(const std::string& str) {
         llvm::outs() << "Invalid boolean string: " << str << "\n";
         exit(1);
     }
-}
-
-template<>
-inline int64_t convertFromString<int64_t>(const std::string& str) {
-    return std::stoll(str);
 }
 
 inline std::string doubleToString(double d) {
@@ -73,7 +54,7 @@ inline std::string doubleToString(double d) {
 }
 
 /** Returns the given string without the wrapping character */
-inline std::string unwrap(const std::string& str, char c = ' ') {
+inline std::string_view unwrap(std::string_view str, char c = ' ') {
     if (str.front() == c && str.back() == c) {
         return str.substr(1, str.size() - 2);
     }
@@ -81,7 +62,7 @@ inline std::string unwrap(const std::string& str, char c = ' ') {
 }
 
 /** Returns the given string without being wrapped in brackets */
-inline std::string unwrapBrackets(const std::string& str) {
+inline std::string_view unwrapBrackets(std::string_view str) {
     if (str.front() == '(' && str.back() == ')') {
         return str.substr(1, str.size() - 2);
     }
@@ -90,6 +71,10 @@ inline std::string unwrapBrackets(const std::string& str) {
 
 inline bool isBlank(const std::string& str) {
     return str.find_first_not_of(' ') == std::string::npos;
+}
+
+inline bool isBlank(const std::string_view& str) {
+    return str.find_first_not_of(' ') == std::string_view::npos;
 }
 
 inline void printFileContents(const std::string& filename, llvm::raw_ostream& ros = llvm::outs()) {

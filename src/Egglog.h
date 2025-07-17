@@ -10,10 +10,10 @@
 class Egglog;
 
 using AttrStringifyFunction = std::function<std::vector<std::string>(mlir::Attribute, Egglog&)>;
-using AttrParseFunction = std::function<mlir::Attribute(const std::vector<std::string>&, Egglog&)>;
+using AttrParseFunction = std::function<mlir::Attribute(const std::vector<std::string_view>&, Egglog&)>;
 
 using TypeStringifyFunction = std::function<std::vector<std::string>(mlir::Type, Egglog&)>;
-using TypeParseFunction = std::function<mlir::Type(const std::vector<std::string>&, Egglog&)>;
+using TypeParseFunction = std::function<mlir::Type(const std::vector<std::string_view>&, Egglog&)>;
 
 /**
  * Holds the functions for stringifying and parsing custom attributes and types.
@@ -21,11 +21,11 @@ using TypeParseFunction = std::function<mlir::Type(const std::vector<std::string
  * To register parser: `parser["<EggT>"] = parse<T>;`
  */
 struct EgglogCustomDefs {
-    std::map<std::string, AttrStringifyFunction> attrStringifiers;
-    std::map<std::string, AttrParseFunction> attrParsers;
+    std::map<std::string, AttrStringifyFunction, std::less<>> attrStringifiers;
+    std::map<std::string, AttrParseFunction, std::less<>> attrParsers;
 
-    std::map<std::string, TypeStringifyFunction> typeStringifiers;
-    std::map<std::string, TypeParseFunction> typeParsers;
+    std::map<std::string, TypeStringifyFunction, std::less<>> typeStringifiers;
+    std::map<std::string, TypeParseFunction, std::less<>> typeParsers;
 };
 
 /** Holds the information about a custom egglog operation */
@@ -157,11 +157,11 @@ public:
      * Splits the given egglog expression string into a list of strings: function name and parameters.
      * Example: "(linalg_add (linalg_abs (tensor_empty)) (tensor_empty))" -> ["linalg_add", "(linalg_abs (tensor_empty))", "(tensor_empty)"]
      */
-    static std::vector<std::string> splitExpression(std::string opStr);
+    static std::vector<std::string_view> splitExpression(std::string_view opStr);
     
     static std::string removeComment(const std::string& str);
 
-    Egglog(mlir::MLIRContext& context, const EgglogCustomDefs& egglogCustom, const std::map<std::string, EgglogOpDef>& supportedEgglogOps)
+    Egglog(mlir::MLIRContext& context, const EgglogCustomDefs& egglogCustom, const std::map<std::string, EgglogOpDef, std::less<>>& supportedEgglogOps)
         : context(context), egglogCustom(egglogCustom), supportedEgglogOps(supportedEgglogOps) {}
 
     ~Egglog() {
@@ -174,20 +174,20 @@ public:
         return opId++;
     }
 
-    bool isSupportedOp(const std::string& opName) {
+    bool isSupportedOp(std::string_view opName) {
         return supportedEgglogOps.find(opName) != supportedEgglogOps.end();
     }
 
     /** Parses the given type string into an MLIR type Form (F16) or (Complex <type>) */
-    mlir::Type parseType(std::string);
+    mlir::Type parseType(std::string_view);
     std::string eggifyType(mlir::Type);
 
     /** Parses the given attribute string into an MLIR named attribute. Form (NamedAttr "<name>" <attr>) */
-    mlir::NamedAttribute parseNamedAttribute(const std::string&);
+    mlir::NamedAttribute parseNamedAttribute(std::string_view);
     std::string eggifyNamedAttribute(mlir::NamedAttribute);
 
     /** Parses the given attribute string into an MLIR attribute. Form (<type> <arg1> <arg2> ... <argN>) */
-    mlir::Attribute parseAttribute(const std::string&);
+    mlir::Attribute parseAttribute(std::string_view);
     std::string eggifyAttribute(mlir::Attribute);
 
     /**
@@ -199,13 +199,13 @@ public:
      *      %1 = tensor.empty() : tensor<2x3xf32>
      *      %2 = linalg.transpose %0, %1 : tensor<3x2xf32>, tensor<2x3xf32>
      */
-    mlir::Operation* parseOperation(const std::string&, mlir::OpBuilder&);
-    mlir::Value parseValue(const std::string&);
-    mlir::Block* parseBlock(const std::string&, mlir::OpBuilder&);
-    std::vector<mlir::Block*> parseBlocksFromRegion(const std::string&, mlir::OpBuilder&);
+    mlir::Operation* parseOperation(std::string_view, mlir::OpBuilder&);
+    mlir::Value parseValue(std::string_view);
+    mlir::Block* parseBlock(std::string_view, mlir::OpBuilder&);
+    std::vector<mlir::Block*> parseBlocksFromRegion(std::string_view, mlir::OpBuilder&);
 
     template<typename T, size_t N>
-    llvm::SmallVector<T, N> parseVector(const std::string& vecStr);
+    llvm::SmallVector<T, N> parseVector(std::string_view, std::function<T(std::string_view)>);
 
     EggifiedOp* eggifyValue(mlir::Value);
     EggifiedOp* eggifyOperation(mlir::Operation*);
@@ -226,11 +226,11 @@ public:
     size_t opId = 0;
     mlir::MLIRContext& context;
     const EgglogCustomDefs& egglogCustom;
-    const std::map<std::string, EgglogOpDef>& supportedEgglogOps;  // Supported operations
+    const std::map<std::string, EgglogOpDef, std::less<>>& supportedEgglogOps;  // Supported operations
 
     // caches
     std::vector<EggifiedOp*> eggifiedBlock;
-    std::map<std::string, mlir::Operation*> parsedOps;
+    std::map<std::string_view, mlir::Operation*> parsedOps;
 };
 
 #endif  //EGGLOG_H
