@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Load environment variables from .env file
+if [ -f .env ]; then
+    source .env
+fi
+
 # Script to compile and execute an MLIR file with llc.
 
 # Usage: ./test/interpret.sh <file>
@@ -10,7 +15,7 @@ MLIR_FILENAME=$(basename $MLIR_FILE .mlir) # name without path or extension
 echo "Executing $MLIR_FILE"
 
 MLIR_LL_FILE="$MLIR_FILEPATH/$MLIR_FILENAME.ll.mlir"
-./build/egg-opt --stablehlo-legalize-to-linalg \
+./build-debug/egg-opt --stablehlo-legalize-to-linalg \
          --convert-elementwise-to-linalg \
          --convert-tensor-to-linalg \
          --convert-linalg-to-loops \
@@ -36,6 +41,6 @@ llc -filetype=obj -O3 "$LL_FILE" -o "$O_FILE"
 
 EXEC_FILE="$MLIR_FILEPATH/$MLIR_FILENAME.exec"
 clang -O3 "$O_FILE" -o "$EXEC_FILE" \
-    -L/Users/aziz/dev/lib/llvm/build-debug/lib -lmlir_c_runner_utils -L/Users/aziz/dev/current/dialegg/test/util -lutil -Wl,-rpath,/Users/aziz/dev/lib/llvm/build-debug/lib -Wl,-rpath,/Users/aziz/dev/current/dialegg/test/util
-# TODO remove hardcoded paths
+    -L"$LLVM_DEBUG_DIR/lib" -lmlir_c_runner_utils -L"test/util" -lutil -Wl,-rpath,"$LLVM_DEBUG_DIR/lib" -Wl,-rpath,"test/util"
+
 "$EXEC_FILE"

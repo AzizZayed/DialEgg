@@ -1,3 +1,8 @@
+# Load environment variables from .env file
+if [ -f .env ]; then
+    source .env
+fi
+
 mlir-opt --convert-elementwise-to-linalg --convert-tensor-to-linalg \
          --convert-linalg-to-loops --one-shot-bufferize=bufferize-function-boundaries=true \
          --convert-linalg-to-loops --expand-strided-metadata --lower-affine --convert-index-to-llvm \
@@ -8,4 +13,4 @@ mlir-opt --convert-elementwise-to-linalg --convert-tensor-to-linalg \
 mlir-translate --mlir-to-llvmir test/util/util.ll.mlir -o test/util/util.ll
 
 clang -dynamiclib test/util/util.ll -o test/util/libutil.dylib \
-    -L/Users/aziz/dev/lib/llvm/build-debug/lib -lmlir_c_runner_utils -Wl,-rpath,/Users/aziz/dev/lib/llvm/build-debug/lib
+    -L"$LLVM_DEBUG_DIR/lib" -lmlir_c_runner_utils -Wl,-rpath,"$LLVM_DEBUG_DIR/lib"

@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Load environment variables from .env file
+if [ -f .env ]; then
+    source .env
+fi
+
 # Script to interpret an MLIR file with lli.
 
 # Usage: ./test/interpret.sh <file>
@@ -10,7 +15,7 @@ MLIR_FILENAME=$(basename $MLIR_FILE .mlir) # name without path or extension
 echo "Interpreting $MLIR_FILE"
 
 MLIR_LL_FILE="$MLIR_FILEPATH/$MLIR_FILENAME.ll.mlir"
-./build/egg-opt --stablehlo-legalize-to-linalg \
+./build-debug/egg-opt --stablehlo-legalize-to-linalg \
          --convert-elementwise-to-linalg \
          --convert-tensor-to-linalg \
          --convert-linalg-to-loops \
@@ -31,5 +36,4 @@ MLIR_LL_FILE="$MLIR_FILEPATH/$MLIR_FILENAME.ll.mlir"
 LL_FILE="$MLIR_FILEPATH/$MLIR_FILENAME.ll"
 mlir-translate --mlir-to-llvmir "$MLIR_LL_FILE" -o "$LL_FILE"
 
-lli --dlopen="/Users/aziz/dev/lib/llvm/build-debug/lib/libmlir_c_runner_utils.dylib" --dlopen="/Users/aziz/dev/current/dialegg/test/util/libutil.dylib" "$LL_FILE"
-# TODO remove hardcoded paths
+lli --dlopen="$LLVM_DEBUG_DIR/lib/libmlir_c_runner_utils.dylib" --dlopen="test/util/libutil.dylib" "$LL_FILE"
