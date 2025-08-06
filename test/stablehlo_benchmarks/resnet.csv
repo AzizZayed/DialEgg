@@ -1,0 +1,15 @@
+op,count
+stablehlo.add,123
+stablehlo.broadcast_in_dim,333
+stablehlo.constant,281
+stablehlo.convert,1
+stablehlo.convolution,53
+stablehlo.divide,1
+stablehlo.maximum,13
+stablehlo.multiply,106
+stablehlo.reduce_window,2
+stablehlo.reshape,106
+stablehlo.return,2
+stablehlo.rsqrt,53
+stablehlo.subtract,53
+stablehlo.transpose,2

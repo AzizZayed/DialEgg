@@ -1,0 +1,13 @@
+op,count
+stablehlo.add,80
+stablehlo.broadcast_in_dim,51
+stablehlo.constant,26
+stablehlo.divide,25
+stablehlo.dot_general,80
+stablehlo.exponential,25
+stablehlo.maximum,1
+stablehlo.multiply,20
+stablehlo.negate,25
+stablehlo.reshape,5
+stablehlo.slice,5
+stablehlo.tanh,40
