@@ -1,0 +1,16 @@
+op,count
+stablehlo.add,10
+stablehlo.broadcast_in_dim,30
+stablehlo.compare,3
+stablehlo.concatenate,1
+stablehlo.constant,6
+stablehlo.convert,1
+stablehlo.gather,2
+stablehlo.iota,6
+stablehlo.multiply,1
+stablehlo.pad,1
+stablehlo.reduce,1
+stablehlo.reshape,4
+stablehlo.select,3
+stablehlo.subtract,3
+stablehlo.transpose,3
