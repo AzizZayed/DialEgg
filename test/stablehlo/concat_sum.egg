@@ -2,8 +2,6 @@
 
 ;;;; StableHLO Dialect ;;;;
 (function stablehlo_add (Op Op Type) Op)
-
-; Only supports concat of 2 inputs
 (function stablehlo_concatenate (Op Op AttrPair Type) Op :cost 100)
 
 ;; OPS HERE ;;

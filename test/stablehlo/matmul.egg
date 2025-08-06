@@ -18,18 +18,32 @@
 ;; RULES HERE ;;
 (ruleset rules)
 
-(rule ((= ?A (Value ?id ?t))) ((set (type-of ?A) ?t)) :ruleset rules)
-(rule ((= ?A (stablehlo_dot_general ?x ?y ?a1 ?a2 ?a3 ?t))) ((set (type-of ?A) ?t)) :ruleset rules)
+(rule ; type-of[v] = v.type
+    ((= ?A (Value ?id ?t))) 
+    ((set (type-of ?A) ?t)) 
+    :ruleset rules
+)
+(rule ; type-of[x] = x.type
+    ((= ?A (stablehlo_dot_general ?x ?y ?a1 ?a2 ?a3 ?t))) 
+    ((set (type-of ?A) ?t)) 
+    :ruleset rules
+)
 
 (function nrows (Type) i64)
 (function ncols (Type) i64)
-(rule ((= ?t (RankedTensor ?shape ?tp))) 
+
+(rule ; nrows[t] = t.shape[0], ncols[t] = t.shape[1]
+    ((= ?t (RankedTensor ?shape ?tp))) 
     ((set (nrows ?t) (vec-get ?shape 0)) 
      (set (ncols ?t) (vec-get ?shape 1)))
     :ruleset rules
 )
 
-(rule 
+; x: a * b
+; y: b * c
+; z: c * d
+
+(rule ; cost[xy] = nrows(x) * ncols(x) * ncols(y)
     ((stablehlo_dot_general ?x ?y ?a1 ?a2 ?a3 ?t)
      (= a (nrows (type-of ?x)))
      (= b (ncols (type-of ?x)))
@@ -39,14 +53,25 @@
     :ruleset rules
 )
 
-(rule
+(rule ; (xy)z -> x(yz)
     ((= ?lhs (stablehlo_dot_general (stablehlo_dot_general ?x ?y ?a1 ?a2 ?a3 ?xy_t) ?z ?a1 ?a2 ?a3 ?xyz_t))
      (= ?b (nrows (type-of ?y)))
      (= ?d (ncols (type-of ?z)))
-     (= ?xyz_t (RankedTensor ? ?t)))
+     (= ?xyz_t (RankedTensor ?_ ?t)))
     
     ((let yz_t (RankedTensor (vec-of ?b ?d) ?t))
      (union ?lhs (stablehlo_dot_general ?x (stablehlo_dot_general ?y ?z ?a1 ?a2 ?a3 yz_t) ?a1 ?a2 ?a3 ?xyz_t)))
+    :ruleset rules
+)
+
+(rule ; x(yz) -> (xy)z
+    ((= ?lhs (stablehlo_dot_general ?x (stablehlo_dot_general ?y ?z ?a1 ?a2 ?a3 ?yz_t) ?a1 ?a2 ?a3 ?xyz_t))
+     (= ?a (nrows (type-of ?x)))
+     (= ?c (ncols (type-of ?y)))
+     (= ?xyz_t (RankedTensor ?_ ?t)))
+
+    ((let xy_t (RankedTensor (vec-of ?a ?c) ?t))
+     (union ?lhs (stablehlo_dot_general (stablehlo_dot_general ?x ?y ?a1 ?a2 ?a3 xy_t) ?z ?a1 ?a2 ?a3 ?xyz_t)))
     :ruleset rules
 )
 

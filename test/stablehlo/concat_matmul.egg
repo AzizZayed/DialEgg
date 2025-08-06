@@ -1,0 +1,94 @@
+(include "src/base.egg")
+
+;;;; StableHLO Dialect ;;;;
+
+;; Types
+(datatype Precision (DEFAULT) (HIGH) (HIGHEST))
+
+;; Attrs
+(function PrecisionAttr (Precision) Attr)
+(function DotDimensionNumbersAttr (IntVec IntVec IntVec IntVec) Attr)
+(function DotAlgorithmAttr (Type Type Type i64 i64 i64 bool) Attr)
+
+;; Ops
+(function stablehlo_dot_general (Op Op AttrPair Type) Op)
+(function stablehlo_concatenate (Op Op AttrPair Type) Op)
+
+;; OPS HERE ;;
+
+;; RULES HERE ;;
+(ruleset rules)
+
+(rule ; type-of[v] = v.type
+    ((= ?A (Value ?id ?t)))
+    ((set (type-of ?A) ?t))
+    :ruleset rules
+)
+(rule ; type-of[x] = x.type
+    ((= ?A (stablehlo_dot_general ?x ?y ?a1  ?t)))
+    ((set (type-of ?A) ?t))
+    :ruleset rules
+)
+(rule ; type-of[x] = x.type
+    ((= ?A (stablehlo_concatenate ?x ?y ?a ?t)))
+    ((set (type-of ?A) ?t))
+    :ruleset rules
+)
+
+(function nrows (Type) i64)
+(function ncols (Type) i64)
+
+(rule ; nrows[t] = t.shape[0]
+    ((= ?t (RankedTensor ?shape ?_)) (>= (vec-length ?shape) 1))
+    ((set (nrows ?t) (vec-get ?shape 0)))
+    :ruleset rules
+)
+
+(rule ; ncols[t] = t.shape[1]
+    ((= ?t (RankedTensor ?shape ?_)) (>= (vec-length ?shape) 2))
+    ((set (ncols ?t) (vec-get ?shape 1)))
+    :ruleset rules
+)
+
+; x: a * b
+; y: b * c
+; z: c * d
+
+(rule ; cost[xy] = nrows(x) * ncols(x) * ncols(y)
+    ((stablehlo_dot_general ?x ?y ?a1  ?t)
+     (= a (nrows (type-of ?x)))
+     (= b (ncols (type-of ?x)))
+     (= c (ncols (type-of ?y))))
+
+    ((unstable-cost (stablehlo_dot_general ?x ?y ?a1  ?t) (* (* a b) c)))
+    :ruleset rules
+)
+
+(rule ; cost[x concat y] = nrows(x) * ncols(x) + nrows(y) * ncols(y)
+    ((stablehlo_concatenate ?x ?y ?a ?t)
+     (= a (nrows (type-of ?x)))
+     (= b (ncols (type-of ?x)))
+     (= c (nrows (type-of ?y)))
+     (= d (ncols (type-of ?y))))
+
+    ((unstable-cost (stablehlo_concatenate ?x ?y ?a ?t) (+ (* a b) (* c d))))
+    :ruleset rules
+)
+
+(rule ; xz 0 yz -> (x 0 y)z where 0 is concatenation on axis 0
+    ((= ?dim0 (NamedAttr "dimension" (IntegerAttr 0 (I64))))
+     (= ?lhs (stablehlo_concatenate (stablehlo_dot_general ?x ?z ?a1 ?xz_t)
+                                    (stablehlo_dot_general ?y ?z ?a1 ?yz_t) ?dim0 ?xz0yz_t))
+     (= ?a (nrows (type-of ?x)))
+     (= ?b (ncols (type-of ?x)))
+     (= ?c (nrows (type-of ?y)))
+     (= ?xz_t (RankedTensor ?_ ?t)))
+
+    ((let x0y_t (RankedTensor (vec-of (+ ?a ?c) ?b) ?t))
+     (union ?lhs (stablehlo_dot_general (stablehlo_concatenate ?x ?y ?dim0 x0y_t) ?z ?a1  ?xz0yz_t)))
+    :ruleset rules
+)
+
+(run-schedule (saturate rules))
+
+;; EXTRACTS HERE ;;
