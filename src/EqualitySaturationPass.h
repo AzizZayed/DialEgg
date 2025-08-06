@@ -16,9 +16,6 @@ struct EqualitySaturationPass : public mlir::PassWrapper<EqualitySaturationPass,
     std::string mlirFilePath;
     std::string eggFilePath;
 
-    std::string egglogExtractedFilename = "egglog-extract.txt";
-    std::string egglogLogFilename = "egglog-log.txt";
-
     EgglogCustomDefs customFunctions;
 
     std::map<std::string, EgglogOpDef, std::less<>> supportedOps;
@@ -37,7 +34,7 @@ struct EqualitySaturationPass : public mlir::PassWrapper<EqualitySaturationPass,
     void runOnOperation() override;
     void runOnFunction(mlir::func::FuncOp&);
     void runOnBlock(mlir::Block&, const std::string&);
-    void runEgglog(const std::vector<EggifiedOp*>&, const std::string&);
+    std::string runEgglog(const std::vector<EggifiedOp*>&, const std::string&);
 };
 
 #endif  // EQUALITYSATURATIONPASS_H

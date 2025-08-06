@@ -33,7 +33,7 @@ static llvm::cl::opt<std::string> eggFileOpt("egg-file", llvm::cl::desc("Path to
 EqualitySaturationPass::EqualitySaturationPass(const std::string& mlirFile, const EgglogCustomDefs& funcs)
     : mlirFilePath(mlirFile), eggFilePath(eggFileOpt), customFunctions(funcs) {}
 
-void EqualitySaturationPass::runEgglog(const std::vector<EggifiedOp*>& block, const std::string& blockName) {
+std::string EqualitySaturationPass::runEgglog(const std::vector<EggifiedOp*>& block, const std::string& blockName) {
     std::ifstream eggFile(eggFilePath);
     std::vector<std::string> egglogLines;
 
@@ -70,7 +70,7 @@ void EqualitySaturationPass::runEgglog(const std::vector<EggifiedOp*>& block, co
     eggFile.close();
 
     // Write the extracted egglog to a new file with the same name and ext .ops.egg
-    std::string name = mlirFilePath.substr(0, mlirFilePath.find(".mlir"));
+    std::string name = mlirFilePath.substr(0, mlirFilePath.find(".mlir")) + "-" + blockName;
     std::string opsEggFilePath = name + ".ops.egg";
     std::ofstream eggFileOut(opsEggFilePath);
     for (const std::string& line: egglogLines) {
@@ -82,7 +82,9 @@ void EqualitySaturationPass::runEgglog(const std::vector<EggifiedOp*>& block, co
     mlirToEgglogTime += std::chrono::duration<double>(end - start).count();
 
     // Run egglog and extract the results
-    std::string egglogCmd = "egglog " + opsEggFilePath + " > " + egglogExtractedFilename + " 2> " + egglogLogFilename;
+    std::string egglogExtractedFilePath = name + "-egglog-extract.log";
+    std::string egglogLogFilePath = name + "-egglog.log";
+    std::string egglogCmd = "egglog " + opsEggFilePath + " > " + egglogExtractedFilePath + " 2> " + egglogLogFilePath;
 
     LLVM_DEBUG(llvm::dbgs() << "Running egglog: " << egglogCmd << "\n");
 
@@ -91,8 +93,8 @@ void EqualitySaturationPass::runEgglog(const std::vector<EggifiedOp*>& block, co
     end = std::chrono::high_resolution_clock::now();
 
     if (ret != 0) {
-        printFileContents(egglogLogFilename);
-        printFileContents(egglogExtractedFilename);
+        printFileContents(egglogLogFilePath);
+        printFileContents(egglogExtractedFilePath);
         llvm::errs() << "Egglog failed\n";
         exit(1);
     }
@@ -100,10 +102,12 @@ void EqualitySaturationPass::runEgglog(const std::vector<EggifiedOp*>& block, co
     egglogExecTime += std::chrono::duration<double>(end - start).count();
 
     // dump output
-    LLVM_DEBUG(printFileContents(egglogLogFilename));
-    LLVM_DEBUG(printFileContents(egglogExtractedFilename));
+    LLVM_DEBUG(printFileContents(egglogLogFilePath));
+    LLVM_DEBUG(printFileContents(egglogExtractedFilePath));
 
     LLVM_DEBUG(llvm::dbgs() << "Done running egglog\n");
+
+    return egglogExtractedFilePath;
 }
 
 void EqualitySaturationPass::runOnBlock(mlir::Block& block, const std::string& blockName) {
@@ -134,11 +138,11 @@ void EqualitySaturationPass::runOnBlock(mlir::Block& block, const std::string& b
         LLVM_DEBUG(eggOp->print(llvm::dbgs()));
     }
 
-    runEgglog(egglog.eggifiedBlock, blockName);  // Run egglog on the block
+    std::string egglogExtractedFilePath = runEgglog(egglog.eggifiedBlock, blockName);  // Run egglog on the block
 
     start = std::chrono::high_resolution_clock::now();
 
-    std::ifstream file(egglogExtractedFilename);
+    std::ifstream file(egglogExtractedFilePath);
 
     // Parse the extracted egglog file and replace the MLIR operations
     std::vector<std::string> lines;
@@ -192,9 +196,7 @@ void EqualitySaturationPass::runOnFunction(mlir::func::FuncOp& func) {
 
     // Perform equality saturation on all operations of a block.
     for (mlir::Block& block: func.getRegion().getBlocks()) {
-        std::string parentOpName = block.getParentOp()->getName().getStringRef().str();
-        std::string blockName = funcName.str() + "_" + parentOpName;
-        runOnBlock(block, blockName);
+        runOnBlock(block, funcName.str());
     }
 
 
@@ -251,11 +253,6 @@ llvm::LogicalResult EqualitySaturationPass::initialize(mlir::MLIRContext* contex
 
         llvm::errs() << "Using default egg file: " << eggFilePath << "\n";
     }
-
-    // mlirFilePath without extension
-    std::string name = mlirFilePath.substr(0, mlirFilePath.find(".mlir"));
-    egglogExtractedFilename = name + "-egglog-extract.log";
-    egglogLogFilename = name + "-egglog.log";
 
     std::ifstream opFile(eggFilePath);
     std::string line;
