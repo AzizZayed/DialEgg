@@ -1,4 +1,4 @@
-(include "src/base.egg")
+(include "../../../src/base.egg")
 
 ;;;; linalg dialect ;;;;
 (function linalg_matmul (Op Op Op Type) Op)
