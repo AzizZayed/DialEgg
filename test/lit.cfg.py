@@ -52,6 +52,7 @@ config.excludes = [
     "scf",
     "util",
     "vector_norm",
+    "stablehlo_benchmarks",
 ]
 
 # test_exec_root: The root path where tests should be run.

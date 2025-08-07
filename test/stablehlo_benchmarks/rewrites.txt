@@ -18,8 +18,6 @@
 (matmul 0 (matmul 0 ?A ?B) (matmul 0 ?C ?A))=>(matmul 0 ?A (matmul 0 (matmul 0 ?B ?C) ?A)) ; (AB)(CA) => A((BC)A)
 (matmul 0 ?A (matmul 0 ?B (matmul 0 ?C ?B)))=>(matmul 0 (matmul 0 (matmul 0 ?A ?B) ?C) ?B) ; A(B(CB)) => ((AB)C)B
 
-; (A | B) C <=> (AC | BC)
-
 (matmul 0 (concat 0 2 ?A (matmul 0 ?B ?A)) ?C)=>(concat 0 2 (matmul 0 ?A ?C) (matmul 0 ?B (matmul 0 ?A ?C))) ; (A | BA) C => (AC | B(AC))
 (concat 1 2 (matmul 0 ?A ?B) (matmul 0 (matmul 0 ?A ?B) ?C))=>(matmul 0 ?A (concat 1 2 ?B (matmul 0 ?B ?C))) ; AB | (AB)C => A(B | BC)
 
