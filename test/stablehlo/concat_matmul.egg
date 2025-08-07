@@ -20,18 +20,18 @@
 (ruleset rules)
 
 (rule ; type-of[v] = v.type
-    ((= ?A (Value ?id ?t)))
-    ((set (type-of ?A) ?t))
+    ((= A (Value ?id ?t)))
+    ((set (type-of A) ?t))
     :ruleset rules
 )
 (rule ; type-of[x] = x.type
-    ((= ?A (stablehlo_dot_general ?x ?y ?a1  ?t)))
-    ((set (type-of ?A) ?t))
+    ((= A (stablehlo_dot_general ?x ?y ?a ?t)))
+    ((set (type-of A) ?t))
     :ruleset rules
 )
 (rule ; type-of[x] = x.type
-    ((= ?A (stablehlo_concatenate ?x ?y ?a ?t)))
-    ((set (type-of ?A) ?t))
+    ((= A (stablehlo_concatenate ?x ?y ?a ?t)))
+    ((set (type-of A) ?t))
     :ruleset rules
 )
 
@@ -39,28 +39,24 @@
 (function ncols (Type) i64)
 
 (rule ; nrows[t] = t.shape[0]
-    ((= ?t (RankedTensor ?shape ?_)) (>= (vec-length ?shape) 1))
-    ((set (nrows ?t) (vec-get ?shape 0)))
+    ((= T (RankedTensor ?shape ?_)) (>= (vec-length ?shape) 1))
+    ((set (nrows T) (vec-get ?shape 0)))
     :ruleset rules
 )
 
 (rule ; ncols[t] = t.shape[1]
-    ((= ?t (RankedTensor ?shape ?_)) (>= (vec-length ?shape) 2))
-    ((set (ncols ?t) (vec-get ?shape 1)))
+    ((= T (RankedTensor ?shape ?_)) (>= (vec-length ?shape) 2))
+    ((set (ncols T) (vec-get ?shape 1)))
     :ruleset rules
 )
 
-; x: a * b
-; y: b * c
-; z: c * d
-
 (rule ; cost[xy] = nrows(x) * ncols(x) * ncols(y)
-    ((stablehlo_dot_general ?x ?y ?a1  ?t)
+    ((stablehlo_dot_general ?x ?y ?a ?t)
      (= a (nrows (type-of ?x)))
      (= b (ncols (type-of ?x)))
      (= c (ncols (type-of ?y))))
 
-    ((unstable-cost (stablehlo_dot_general ?x ?y ?a1  ?t) (* (* a b) c)))
+    ((unstable-cost (stablehlo_dot_general ?x ?y ?a ?t) (* (* a b) c)))
     :ruleset rules
 )
 
@@ -75,17 +71,31 @@
     :ruleset rules
 )
 
-(rule ; xz 0 yz -> (x 0 y)z where 0 is concatenation on axis 0
-    ((= ?dim0 (NamedAttr "dimension" (IntegerAttr 0 (I64))))
-     (= ?lhs (stablehlo_concatenate (stablehlo_dot_general ?x ?z ?a1 ?xz_t)
-                                    (stablehlo_dot_general ?y ?z ?a1 ?yz_t) ?dim0 ?xz0yz_t))
-     (= ?a (nrows (type-of ?x)))
-     (= ?b (ncols (type-of ?x)))
-     (= ?c (nrows (type-of ?y)))
-     (= ?xz_t (RankedTensor ?_ ?t)))
+(let dim0 (NamedAttr "dimension" (IntegerAttr 0 (I64))))
 
-    ((let x0y_t (RankedTensor (vec-of (+ ?a ?c) ?b) ?t))
-     (union ?lhs (stablehlo_dot_general (stablehlo_concatenate ?x ?y ?dim0 x0y_t) ?z ?a1  ?xz0yz_t)))
+(rule ; xz 0 yz -> (x 0 y)z where 0 is concatenation on axis 0
+    ((= xz (stablehlo_dot_general ?x ?z ?a (RankedTensor ?s1 ?t)))
+     (= yz (stablehlo_dot_general ?y ?z ?a (RankedTensor ?s2 ?t)))
+     (= xz0yz (stablehlo_concatenate xz yz dim0 ?xz0yz_t))
+     (= xr (nrows (type-of ?x)))
+     (= xc (ncols (type-of ?x)))
+     (= yr (nrows (type-of ?y))))
+
+    ((let x0y (stablehlo_concatenate ?x ?y dim0 (RankedTensor (vec-of (+ xr yr) xc) ?t)))
+     (union xz0yz (stablehlo_dot_general x0y ?z ?a ?xz0yz_t)))
+    :ruleset rules
+)
+
+(rule ; (x 0 y)z -> xz 0 yz where 0 is concatenation on axis 0
+    ((= x0y (stablehlo_concatenate ?x ?y dim0 (RankedTensor ?s1 ?t)))
+     (= x0y_z (stablehlo_dot_general x0y ?z ?a ?x0y_z_t))
+     (= xr (nrows (type-of ?x)))
+     (= yr (nrows (type-of ?y)))
+     (= zc (ncols (type-of ?z))))
+
+    ((let xz (stablehlo_dot_general ?x ?z ?a (RankedTensor (vec-of xr zc) ?t)))
+     (let yz (stablehlo_dot_general ?y ?z ?a (RankedTensor (vec-of yr zc) ?t)))
+     (union x0y_z (stablehlo_concatenate xz yz dim0 ?x0y_z_t)))
     :ruleset rules
 )
 
