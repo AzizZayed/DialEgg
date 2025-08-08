@@ -1,4 +1,4 @@
-(include "src/base.egg") ; The tests are run from "build/test/stablehlo"
+(include "../../../src/base.egg") ; The tests are run from "build/test/stablehlo"
 
 ;;;; StableHLO Dialect ;;;;
 
@@ -67,6 +67,7 @@
 
 ;; SIMPLE RULES ;;
 
+; element-wise rules
 (birewrite ; x * 2 = x + x
     (stablehlo_multiply ?x (stablehlo_constant (NamedAttr "value" (DenseFPElementsAttr (vec-of 2.0) ?t)) ?t) ?t)
     (stablehlo_add ?x ?x ?t)
@@ -87,7 +88,7 @@
 
 (birewrite ; A + (B + C) <-> (A + B) + C
     (stablehlo_add ?a (stablehlo_add ?b ?c ?t) ?t)
-    (stablehlo_add (stablehlo_add ?a ?b (type-of ?a)) ?c ?t)
+    (stablehlo_add (stablehlo_add ?a ?b ?t) ?c ?t)
     :ruleset rules
 )
 
@@ -109,9 +110,16 @@
     :ruleset rules
 )
 
-(birewrite ; concat(A, B) + concat(C, D) -> concat(A + C, B + D)
+; concat rules
+(rewrite ; (A | B) | C -> A | (B | C)
+    (stablehlo_concatenate (stablehlo_concatenate ?a ?b ?dim ?ab_t) ?c ?dim ?t)
+    (stablehlo_concatenate ?a (stablehlo_concatenate ?b ?c ?dim (InferType)) ?dim ?t)
+    :ruleset rules
+)
+
+(rewrite ; (A | B) + (C | D) -> (A + C) | (B + D)
     (stablehlo_add (stablehlo_concatenate ?a ?b ?dim ?t) (stablehlo_concatenate ?c ?d ?dim ?t) ?t)
-    (stablehlo_concatenate (stablehlo_add ?a ?c (type-of ?a)) (stablehlo_add ?b ?d (type-of ?b)) ?dim ?t)
+    (stablehlo_concatenate (stablehlo_add ?a ?c (InferType)) (stablehlo_add ?b ?d (InferType)) ?dim ?t)
     :ruleset rules
 )
 
@@ -142,29 +150,26 @@
 )
 
 (let dim0 (NamedAttr "dimension" (IntegerAttr 0 (I64))))
-(rule ; xz 0 yz -> (x 0 y)z where 0 is concatenation on axis 0
-    ((= xz (stablehlo_dot_general ?x ?z ?a (RankedTensor ?s1 ?t)))
-     (= yz (stablehlo_dot_general ?y ?z ?a (RankedTensor ?s2 ?t)))
-     (= xz0yz (stablehlo_concatenate xz yz dim0 ?xz0yz_t))
-     (= xr (nrows (type-of ?x)))
-     (= xc (ncols (type-of ?x)))
-     (= yr (nrows (type-of ?y))))
+(rule ; xz 0 yz -> (x 0 y)z where 0 is concatenation along axis 0
+    [(= xz (stablehlo_dot_general ?x ?z ?a ?t1))
+     (= yz (stablehlo_dot_general ?y ?z ?a ?t2))
+     (= xz0yz (stablehlo_concatenate xz yz dim0 ?xz0yz_t))]
 
-    ((let x0y (stablehlo_concatenate ?x ?y dim0 (RankedTensor (vec-of (+ xr yr) xc) ?t)))
-     (union xz0yz (stablehlo_dot_general x0y ?z ?a ?xz0yz_t)))
+    [(let x0y (stablehlo_concatenate ?x ?y dim0 (InferType)))
+     (union xz0yz (stablehlo_dot_general x0y ?z ?a ?xz0yz_t))]
     :ruleset rules
 )
 
-(rule ; (x 0 y)z -> xz 0 yz where 0 is concatenation on axis 0
-    ((= x0y (stablehlo_concatenate ?x ?y dim0 (RankedTensor ?s1 ?t)))
+(rule ; (x 0 y)z -> xz 0 yz where 0 is concatenation along axis 0
+    [(= x0y (stablehlo_concatenate ?x ?y dim0 (RankedTensor ?s1 ?t)))
      (= x0y_z (stablehlo_dot_general x0y ?z ?a ?x0y_z_t))
      (= xr (nrows (type-of ?x)))
      (= yr (nrows (type-of ?y)))
-     (= zc (ncols (type-of ?z))))
+     (= zc (ncols (type-of ?z)))]
 
-    ((let xz (stablehlo_dot_general ?x ?z ?a (RankedTensor (vec-of xr zc) ?t)))
+    [(let xz (stablehlo_dot_general ?x ?z ?a (RankedTensor (vec-of xr zc) ?t)))
      (let yz (stablehlo_dot_general ?y ?z ?a (RankedTensor (vec-of yr zc) ?t)))
-     (union x0y_z (stablehlo_concatenate xz yz dim0 ?x0y_z_t)))
+     (union x0y_z (stablehlo_concatenate xz yz dim0 ?x0y_z_t))]
     :ruleset rules
 )
 
