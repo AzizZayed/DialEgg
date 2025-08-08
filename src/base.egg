@@ -60,6 +60,7 @@
 (function UnrankedTensor (Type) Type)
 
 (function OpaqueType (String String) Type)
+(function InferType () Type :cost 1)
 
 ; Dynamic RankedTensor type
 ; (datatype Dimension
@@ -93,7 +94,5 @@
 ; DenseStringElementsAttr
 ; DictionaryAttr
 ; IntegerSetAttr
-; OpaqueAttr
 ; SparseElementsAttr
-; SymbolRefAttr
 ; StridedLayoutAttr

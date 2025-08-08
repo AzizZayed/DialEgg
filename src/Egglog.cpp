@@ -35,7 +35,7 @@ EgglogOpDef EgglogOpDef::parseOpFunction(const std::string& opStr) {
         assert(split.back() == "Op");
     }
 
-    std::string_view fullName = split[1]; // dialect_name_name_name_version or dialect_name_name_name
+    std::string_view fullName = split[1];  // dialect_name_name_name_version or dialect_name_name_name
 
     size_t firstUnderscore = fullName.find_first_of('_');
     std::string_view dialect = fullName.substr(0, firstUnderscore);
@@ -49,8 +49,8 @@ EgglogOpDef EgglogOpDef::parseOpFunction(const std::string& opStr) {
     }
 
     LLVM_DEBUG(llvm::dbgs() << "Parsing EgglogOpDef: " << newOpStr << "\n"
-                << "Full Name: " << fullName << "\n"
-                << "Dialect: " << dialect << ", Name: " << name << ", Version: " << version << "\n");
+                            << "Full Name: " << fullName << "\n"
+                            << "Dialect: " << dialect << ", Name: " << name << ", Version: " << version << "\n");
 
     std::vector<std::string_view> args = Egglog::splitExpression(split[2]);
 
@@ -150,7 +150,7 @@ std::vector<std::string_view> Egglog::splitExpression(std::string_view opStr) {
     // if (!isBlank(ss.str())) {
     //     result.push_back(ss.str());
     // }
-    
+
     if (splitStart < opStr.size() - 1) {
         std::string_view token = opStr.substr(splitStart, opStr.size() - splitStart - 1);
         if (!isBlank(token)) {
@@ -480,7 +480,7 @@ mlir::Attribute Egglog::parseAttribute(std::string_view attrStr) {
         std::string_view directionStr = unwrapBrackets(split[1]);
         mlir::stablehlo::ComparisonDirection direction = mlir::stablehlo::symbolizeComparisonDirection(directionStr).value();
         return mlir::stablehlo::ComparisonDirectionAttr::get(&context, direction);
-    } else if (attrType == "ComparisonTypeAttr") { // (ComparisonTypeAttr (NOTYPE | FLOAT | TOTALORDER | SIGNED | UNSIGNED))
+    } else if (attrType == "ComparisonTypeAttr") {  // (ComparisonTypeAttr (NOTYPE | FLOAT | TOTALORDER | SIGNED | UNSIGNED))
         std::string_view typeStr = unwrapBrackets(split[1]);
         mlir::stablehlo::ComparisonType type = mlir::stablehlo::symbolizeComparisonType(typeStr).value();
         return mlir::stablehlo::ComparisonTypeAttr::get(&context, type);
@@ -492,7 +492,7 @@ mlir::Attribute Egglog::parseAttribute(std::string_view attrStr) {
         int64_t int2 = svtoll(split[5]);
         int64_t int3 = svtoll(split[6]);
         return mlir::stablehlo::DotAlgorithmAttr::get(&context, type1, type2, type3, int1, int2, int3, split[7] == "true");
-    } else if (attrType == "DotDimensionNumbersAttr") { // (DotDimensionNumbersAttr <intvec> <intvec> <intvec> <intvec>)
+    } else if (attrType == "DotDimensionNumbersAttr") {  // (DotDimensionNumbersAttr <intvec> <intvec> <intvec> <intvec>)
         std::vector<int64_t> lhsBatchingDimensions;
         std::vector<int64_t> rhsBatchingDimensions;
         std::vector<int64_t> lhsContractingDimensions;
@@ -530,7 +530,7 @@ mlir::Attribute Egglog::parseAttribute(std::string_view attrStr) {
     }
 }
 
-template<typename T, size_t N>
+template <typename T, size_t N>
 llvm::SmallVector<T, N> Egglog::parseVector(std::string_view vecStr, std::function<T(std::string_view)> svto) {
     llvm::SmallVector<T, N> result;
     std::vector<std::string_view> vecSplit = splitExpression(vecStr);
@@ -698,7 +698,7 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         mlir::SymbolRefAttr symbolRefAttr = mlir::cast<mlir::SymbolRefAttr>(attr);
         std::string value = symbolRefAttr.getRootReference().str();
         ss << "(SymbolRefAttr \"" << value << "\")";
-    } else if (typeId == mlir::TypeID::get<mlir::stablehlo::ComparisonDirectionAttr>()) {  
+    } else if (typeId == mlir::TypeID::get<mlir::stablehlo::ComparisonDirectionAttr>()) {
         mlir::stablehlo::ComparisonDirectionAttr comparisonDirectionAttr = mlir::cast<mlir::stablehlo::ComparisonDirectionAttr>(attr);
         ss << "(ComparisonDirectionAttr (" << mlir::stablehlo::stringifyComparisonDirection(comparisonDirectionAttr.getValue()) << "))";
     } else if (typeId == mlir::TypeID::get<mlir::stablehlo::ComparisonTypeAttr>()) {  // (ComparisonTypeAttr <type>)
@@ -736,7 +736,7 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
             ss << " " << dim;
         }
         ss << "))";
-    
+
     } else if (egglogCustom.attrStringifiers.find(typeName) != egglogCustom.attrStringifiers.end()) {  // custom attr by user
         AttrStringifyFunction stringifyFunc = egglogCustom.attrStringifiers.at(typeName);
         std::vector<std::string> split = stringifyFunc(attr, *this);
@@ -774,7 +774,7 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
     return egglogCode;
 }
 
-template<typename T, typename U>
+template <typename T, typename U>
 void Egglog::eggifyIterable(llvm::raw_string_ostream& ss, U range) {
     ss << "(vec-of";
     for (T value: range) {
@@ -851,10 +851,16 @@ mlir::Operation* Egglog::parseOperation(std::string_view newOpStr, mlir::OpBuild
     }
 
     // Return type
+    bool inferTypes = false;
     std::vector<mlir::Type> types;
     for (size_t i = 0; i < egglogOpDef.nResults; i++, index++) {
-        mlir::Type type = parseType(split[index + 1]);
-        types.push_back(type);
+        std::string_view typeStr = split[index + 1];
+        if (typeStr == "(InferType)") {
+            inferTypes = true;
+        } else {
+            mlir::Type type = parseType(typeStr);
+            types.push_back(type);
+        }
     }
 
     // Create the operation
@@ -872,7 +878,46 @@ mlir::Operation* Egglog::parseOperation(std::string_view newOpStr, mlir::OpBuild
         mlir::OperationState state(mlir::UnknownLoc::get(&context), mlirOpName);
         state.addOperands(operands);
         state.addAttributes(attributes);
-        state.addTypes(types);
+
+        if (inferTypes) {
+            mlir::Operation* testOp = mlir::Operation::create(state);
+            auto inferOp = llvm::dyn_cast_or_null<mlir::InferTypeOpInterface>(testOp);
+            if (inferOp) {
+                llvm::SmallVector<mlir::Type, 4> inferredReturnTypes;
+                if (llvm::failed(inferOp.inferReturnTypes(testOp->getContext(), testOp->getLoc(), testOp->getOperands(), testOp->getAttrDictionary(), testOp->getPropertiesStorage(), testOp->getRegions(), inferredReturnTypes))) {
+                    llvm::errs() << "Failed to infer return types for operation: " << mlirOpName << "\n";
+                    exit(1);
+                }
+
+                state.addTypes(inferredReturnTypes);
+            } else {
+                llvm::errs() << "Operation " << mlirOpName << " does not implement InferTypeOpInterface.\n";
+
+                // TODO test this code below, didn't work for dot_general
+                auto inferOp2 = llvm::dyn_cast_or_null<mlir::InferShapedTypeOpInterface>(testOp);
+                if (inferOp2) {
+                    llvm::SmallVector<::mlir::ShapedTypeComponents, 4> inferredReturnTypeComponents;
+                    if (llvm::failed(inferOp2.inferReturnTypeComponents(testOp->getContext(), testOp->getLoc(), testOp->getOperands(), testOp->getAttrDictionary(), testOp->getPropertiesStorage(), testOp->getRegions(), inferredReturnTypeComponents))) {
+                        llvm::errs() << "Failed to infer return type components for operation: " << mlirOpName << "\n";
+                        exit(1);
+                    }
+
+                    for (const auto& components: inferredReturnTypeComponents) {
+                        if (components.hasRank()) {
+                            state.addTypes(mlir::RankedTensorType::get(components.getDims(), components.getElementType()));
+                        } else {
+                            state.addTypes(mlir::UnrankedTensorType::get(components.getElementType()));
+                        }
+                    }
+                } else {
+                    llvm::errs() << "Operation " << mlirOpName << " does not implement InferShapedTypeOpInterface.\n";
+                }
+            }
+
+            testOp->destroy();
+        } else {
+            state.addTypes(types);
+        }
 
         for (size_t i = 0; i < regions.size(); i++) {
             mlir::Region* region = state.addRegion();
