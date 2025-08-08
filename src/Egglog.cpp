@@ -629,37 +629,65 @@ std::string Egglog::eggifyAttribute(mlir::Attribute attr) {
         if (elementType.isInteger(64)) {
             auto values = denseIntOrFPAttr.getValues<int64_t>();
             ss << "(DenseIntElementsAttr ";
-            eggifyIterable<int64_t>(ss, values);
+            if (denseIntOrFPAttr.isSplat()) {
+                ss << "(vec-of " << values[0] << ")";
+            } else {
+                eggifyIterable<int64_t>(ss, values);
+            }
             ss << eggifyType(shapedType) << ")";
         } else if (elementType.isInteger(32)) {
             auto values = denseIntOrFPAttr.getValues<int32_t>();
             ss << "(DenseIntElementsAttr ";
-            eggifyIterable<int32_t>(ss, values);
+            if (denseIntOrFPAttr.isSplat()) {
+                ss << "(vec-of " << values[0] << ")";
+            } else {
+                eggifyIterable<int32_t>(ss, values);
+            }
             ss << eggifyType(shapedType) << ")";
         } else if (elementType.isInteger(16)) {
             auto values = denseIntOrFPAttr.getValues<int16_t>();
             ss << "(DenseIntElementsAttr ";
-            eggifyIterable<int16_t>(ss, values);
+            if (denseIntOrFPAttr.isSplat()) {
+                ss << "(vec-of " << values[0] << ")";
+            } else {
+                eggifyIterable<int16_t>(ss, values);
+            }
             ss << eggifyType(shapedType) << ")";
         } else if (elementType.isInteger(8)) {
             auto values = denseIntOrFPAttr.getValues<int8_t>();
             ss << "(DenseIntElementsAttr ";
-            eggifyIterable<int8_t>(ss, values);
+            if (denseIntOrFPAttr.isSplat()) {
+                ss << "(vec-of " << values[0] << ")";
+            } else {
+                eggifyIterable<int8_t>(ss, values);
+            }
             ss << eggifyType(shapedType) << ")";
         } else if (elementType.isInteger(1)) {
             auto values = denseIntOrFPAttr.getValues<bool>();
             ss << "(DenseIntElementsAttr ";
-            eggifyIterable<bool>(ss, values);
+            if (denseIntOrFPAttr.isSplat()) {
+                ss << "(vec-of " << values[0] << ")";
+            } else {
+                eggifyIterable<bool>(ss, values);
+            }
             ss << eggifyType(shapedType) << ")";
         } else if (elementType.isF64()) {
             auto values = denseIntOrFPAttr.getValues<double>();
             ss << "(DenseFPElementsAttr ";
-            eggifyIterable<double>(ss, values);
+            if (denseIntOrFPAttr.isSplat()) {
+                ss << "(vec-of " << values[0] << ")";
+            } else {
+                eggifyIterable<double>(ss, values);
+            }
             ss << eggifyType(shapedType) << ")";
         } else if (elementType.isF32()) {
             auto values = denseIntOrFPAttr.getValues<float>();
             ss << "(DenseFPElementsAttr ";
-            eggifyIterable<float>(ss, values);
+            if (denseIntOrFPAttr.isSplat()) {
+                ss << "(vec-of " << values[0] << ")";
+            } else {
+                eggifyIterable<float>(ss, values);
+            }
             ss << eggifyType(shapedType) << ")";
         } else {
             llvm::outs() << "Unsupported DenseIntOrFPElementsAttr type: " << elementType << "\n";
