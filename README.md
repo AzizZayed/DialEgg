@@ -43,12 +43,39 @@ Then build it in release mode
 cargo build --release
 ```
 
+**Note:** Make sure the `egglog` executable is in your PATH before running DialEgg.
+
+### StableHLO
+DialEgg requires StableHLO as a dependency. Clone it as a sibling directory or subdirectory:
+
+```bash
+git clone https://github.com/openxla/stablehlo.git
+```
+
+To avoid test-related build issues when building StableHLO embedded, comment out test subdirectories in the following files:
+- `stablehlo/stablehlo/CMakeLists.txt`: Comment out `add_subdirectory(tests)` and `add_subdirectory(testdata)`
+- `stablehlo/stablehlo/conversions/linalg/CMakeLists.txt`: Comment out `add_subdirectory(tests)`
+- `stablehlo/stablehlo/conversions/tosa/CMakeLists.txt`: Comment out `add_subdirectory(tests)`
+- `stablehlo/stablehlo/integrations/CMakeLists.txt`: Comment out `add_subdirectory(c)`
+
 ### DialEgg
 Within the root directory of this repo, build DialEgg:
 
 ```bash
 mkdir build
-cmake -S . -B build -DLLVM_DIR=[path to llvm cmake dir] -DMLIR_DIR=[path to mlir cmake dir]
+cmake -S . -B build \
+    -DLLVM_DIR=[path to llvm cmake dir] \
+    -DMLIR_DIR=[path to mlir cmake dir] \
+    -DSTABLEHLO_DIR=[path to stablehlo]
+cmake --build build
+```
+
+Example with actual paths:
+```bash
+cmake -S . -B build \
+    -DLLVM_DIR=/path/to/llvm-install/lib/cmake/llvm \
+    -DMLIR_DIR=/path/to/llvm-install/lib/cmake/mlir \
+    -DSTABLEHLO_DIR=/path/to/stablehlo
 cmake --build build
 ```
 
@@ -105,7 +132,7 @@ Egglog ops and rules in [test/classic/classic.egg](test/classic/classic.egg):
 Run this and the output will be the optimized MLIR.
 
 ```bash
-./build/egg-opt --eq-sat test/classic/classic.mlir --egg test/classic/classic.egg
+./build/egg-opt --eq-sat --egg-file=test/classic/classic.egg test/classic/classic.mlir
 ```
 Result:
 ```llvm

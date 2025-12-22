@@ -46,7 +46,21 @@ add_definitions(${LLVM_DEFINITIONS})
 
 get_property(dialect_libs GLOBAL PROPERTY MLIR_DIALECT_LIBS)
 get_property(conversion_libs GLOBAL PROPERTY MLIR_CONVERSION_LIBS)
-set(OPT_LIBS ${dialect_libs} ${conversion_libs} MLIROptLib)
+set(OPT_LIBS 
+    ${dialect_libs} 
+    ${conversion_libs} 
+    MLIROptLib
+    MLIRParser
+    MLIRPass
+    MLIRSupport
+    MLIRTransforms
+    MLIRRegisterAllDialects
+    MLIRRegisterAllPasses
+    StablehloOps
+    ChloOps
+    StablehloPasses
+    StablehloRegister
+)
 
 add_llvm_executable(egg-opt src/egg-opt.cpp src/EqualitySaturationPass.cpp src/Egglog.cpp)
 llvm_update_compile_flags(egg-opt)

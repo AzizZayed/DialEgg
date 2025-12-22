@@ -7,8 +7,6 @@
 
 #include "stablehlo/dialect/Register.h"
 #include "stablehlo/conversions/linalg/transforms/Passes.h"
-#include "stablehlo/tests/CheckOps.h"
-#include "stablehlo/tests/TestUtils.h"
 #include "stablehlo/transforms/Passes.h"
 #include "stablehlo/transforms/optimization/Passes.h"
 
