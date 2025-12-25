@@ -50,6 +50,9 @@ DialEgg requires StableHLO as a dependency. Clone it as a sibling directory or s
 
 ```bash
 git clone https://github.com/openxla/stablehlo.git
+cd stablehlo
+git checkout 4a6ea0d65a0ed97f91a04276fcda88fc516ae6de
+cd ..
 ```
 
 To avoid test-related build issues when building StableHLO embedded, comment out test subdirectories in the following files:
