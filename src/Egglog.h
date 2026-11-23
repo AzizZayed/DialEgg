@@ -111,7 +111,7 @@ struct EggifiedOp {
      * 
      * Opaque ops are never touched and thus do not need to be extracted.
      * Operations with no users must be extracted, in case they were optimized by Egglog.
-     * Operations with all users as opaque must be extracted, in case they were optimized by Egglog.
+     * Operations with an opaque user must be extracted, in case they were optimized by Egglog: the user is repointed to the optimized operation.
      * Operations with a non-opaque user may not be extracted, as the optimized operation will be inlined in the user.
      */
     bool shouldBeExtracted() const {
@@ -129,7 +129,7 @@ struct EggifiedOp {
         if (nested) {
             return hasUnsupportedUser ? ExtractionKind::ForOpaqueUsers : ExtractionKind::None;
         }
-        return hasNonOpaqueUser() ? ExtractionKind::None : ExtractionKind::Root;
+        return hasNonOpaqueUser() && !hasUnsupportedUser ? ExtractionKind::None : ExtractionKind::Root;
     }
 
     /** Whether a user that is not opaque consumes this operation, looking through result projections. */
