@@ -1,6 +1,7 @@
 #include <map>
 #include <unordered_map>
 #include <vector>
+#include <deque>
 #include <iostream>
 #include <sstream>
 #include <fstream>
@@ -130,6 +131,8 @@ void EqualitySaturationPass::runOnBlock(mlir::Block& block, const std::string& b
         // eggifiedOp->print(llvm::outs());
     }
 
+    egglog.markUnsupportedUsers();
+
     auto end = std::chrono::high_resolution_clock::now();
     mlirToEgglogTime += std::chrono::duration<double>(end - start).count();
 
@@ -145,7 +148,7 @@ void EqualitySaturationPass::runOnBlock(mlir::Block& block, const std::string& b
     std::ifstream file(egglogExtractedFilePath);
 
     // Parse the extracted egglog file and replace the MLIR operations
-    std::vector<std::string> lines;
+    std::deque<std::string> lines;  // stable references: parsed operations are cached by views into these lines
     for (const EggifiedOp* eggOp: egglog.eggifiedBlock) {
         if (!eggOp->shouldBeExtracted()) {
             continue;
@@ -155,6 +158,11 @@ void EqualitySaturationPass::runOnBlock(mlir::Block& block, const std::string& b
 
         lines.emplace_back();
         std::getline(file, lines.back());
+
+        if (eggOp->extractionKind() == EggifiedOp::ExtractionKind::ForOpaqueUsers) {  // rebuilt with its region, only remember what to repoint its unsupported users to
+            egglog.opaqueUserReplacements[eggOp->mlirOp] = lines.back();
+            continue;
+        }
 
         // llvm::outs() << eggOp.getPrintId() << " = " << line << "\n";
 
