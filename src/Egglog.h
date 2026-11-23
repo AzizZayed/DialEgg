@@ -76,6 +76,9 @@ struct EggifiedOp {
     std::vector<mlir::Value> mlirValues;
     mlir::Operation* mlirOp;
 
+    // true if this is a `(Get <op> <index>)` projection of one result of a multi-result operation
+    bool projection = false;
+
     EggifiedOp(size_t id, bool opaque, std::string egglogOp, const std::vector<EggifiedOp*>& operands, const std::vector<mlir::Value>& mlirValues, mlir::Operation* mlirOp)
         : id(id), opaque(opaque), egglogOp(egglogOp), operands(operands), mlirValues(mlirValues), mlirOp(mlirOp) {}
 
@@ -84,6 +87,12 @@ struct EggifiedOp {
     }
     static EggifiedOp* value(size_t id, std::string egglogOp, mlir::Value mlirValue) {
         return new EggifiedOp(id, true, egglogOp, {}, {mlirValue}, mlirValue.getDefiningOp());
+    }
+    /** A `(Get <op> <index>)` term standing for result `index` (`mlirValue`) of the multi-result operation `owner`. */
+    static EggifiedOp* resultProjection(size_t id, std::string egglogOp, EggifiedOp* owner, mlir::Value mlirValue) {
+        EggifiedOp* eggified = new EggifiedOp(id, false, egglogOp, {owner}, {mlirValue}, nullptr);
+        eggified->projection = true;
+        return eggified;
     }
     static EggifiedOp* op(size_t id, std::string egglogOp, const std::vector<EggifiedOp*>& operands, mlir::Operation* mlirOp) {
         return new EggifiedOp(id, false, egglogOp, operands, std::vector<mlir::Value>(mlirOp->result_begin(), mlirOp->result_end()), mlirOp);
@@ -98,18 +107,25 @@ struct EggifiedOp {
      * Operations with a non-opaque user may not be extracted, as the optimized operation will be inlined in the user.
      */
     bool shouldBeExtracted() const {
-        if (opaque) {  // do no extract opaque operations
+        if (opaque || projection) {  // do no extract opaque operations, nor result projections (they are part of their users)
             return false;
         }
 
-        // extract operation that have all users as opaque (in other words, do not extract if there is a user that is not opaque)
+        return !hasNonOpaqueUser();
+    }
+
+    /** Whether a user that is not opaque consumes this operation, looking through result projections. */
+    bool hasNonOpaqueUser() const {
         for (const EggifiedOp* user: users) {
-            if (!user->opaque) {
-                return false;
+            if (user->projection) {
+                if (user->hasNonOpaqueUser()) {
+                    return true;
+                }
+            } else if (!user->opaque) {
+                return true;
             }
         }
-
-        return true;
+        return false;
     }
 
     void addUser(EggifiedOp* user) {
@@ -201,6 +217,8 @@ public:
      */
     mlir::Operation* parseOperation(std::string_view, mlir::OpBuilder&);
     mlir::Value parseValue(std::string_view);
+    /** Parses an operand: `(Value <id> <type>)`, `(Get <op> <index>)` (one result of a multi-result op) or a nested operation (its first result). */
+    mlir::Value parseOperand(std::string_view, mlir::OpBuilder&);
     mlir::Block* parseBlock(std::string_view, mlir::OpBuilder&);
     std::vector<mlir::Block*> parseBlocksFromRegion(std::string_view, mlir::OpBuilder&);
 

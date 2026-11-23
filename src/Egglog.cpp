@@ -797,6 +797,30 @@ mlir::Value Egglog::parseValue(std::string_view valueStr) {
     return eggifiedOp->mlirValues[0];
 }
 
+mlir::Value Egglog::parseOperand(std::string_view operandStr, mlir::OpBuilder& builder) {
+    if (operandStr.find("(Value ") == 0) {
+        return parseValue(operandStr);
+    }
+
+    std::vector<std::string_view> split = splitExpression(operandStr);
+    if (split[0] == "Get") {  // (Get <op> <index>)
+        mlir::Operation* owner = parseOperation(split[1], builder);
+        size_t index = svtoll(split[2]);
+        if (owner == nullptr || index >= owner->getNumResults()) {
+            llvm::errs() << "Invalid result projection '" << operandStr << "': the operation has no result " << index << ". Check that the egglog rewrite rules keep the number of results of multi-result operations.\n";
+            exit(1);
+        }
+        return owner->getResult(index);
+    }
+
+    mlir::Operation* operandOp = parseOperation(operandStr, builder);
+    if (operandOp == nullptr || operandOp->getNumResults() == 0) {
+        llvm::errs() << "Operand '" << operandStr << "' has no result. Check that the egglog rewrite rules only use operations with results as operands.\n";
+        exit(1);
+    }
+    return operandOp->getResult(0);
+}
+
 mlir::Operation* Egglog::parseOperation(std::string_view newOpStr, mlir::OpBuilder& builder) {
     // llvm::outs() << "PARSING OPERATION: " << newOpStr << "\n";
     std::vector<std::string_view> split = splitExpression(newOpStr);
@@ -829,10 +853,8 @@ mlir::Operation* Egglog::parseOperation(std::string_view newOpStr, mlir::OpBuild
         if (operandStr.find("(Value ") == 0) {
             mlir::Value operand = parseValue(operandStr);
             operands.push_back(operand);
-        } else {  // new operation
-            mlir::Operation* nestedOperand = parseOperation(operandStr, builder);
-            mlir::Value operand = nestedOperand->getResult(0);  // TODO support multiple results?
-            operands.push_back(operand);
+        } else {  // new operation, or one result of a multi-result operation
+            operands.push_back(parseOperand(operandStr, builder));
         }
     }
 
@@ -970,6 +992,25 @@ mlir::Block* Egglog::parseBlock(std::string_view blockStr, mlir::OpBuilder& buil
 
 // (Value <id> <type>)
 EggifiedOp* Egglog::eggifyValue(mlir::Value value) {
+    // one result of a multi-result operation is `(Get <op> <index>)`, so that the result index survives the round trip
+    if (auto result = mlir::dyn_cast<mlir::OpResult>(value); result && result.getOwner()->getNumResults() > 1) {
+        EggifiedOp* owner = eggifyOperation(result.getOwner());
+        if (!owner->opaque) {
+            for (EggifiedOp* eggified: eggifiedBlock) {
+                if (eggified->projection && eggified->operands[0] == owner && eggified->mlirValues[0] == value) {
+                    return eggified;
+                }
+            }
+
+            size_t id = nextId();
+            std::string egglogOp = "(Get " + owner->getPrintId() + " " + std::to_string(result.getResultNumber()) + ")";
+            EggifiedOp* projection = EggifiedOp::resultProjection(id, egglogOp, owner, value);
+            owner->addUser(projection);
+            eggifiedBlock.push_back(projection);
+            return projection;
+        }
+    }
+
     EggifiedOp* foundEggifiedOp = findEggifiedOp(value);
     if (foundEggifiedOp != nullptr) {
         return foundEggifiedOp;
@@ -987,6 +1028,17 @@ EggifiedOp* Egglog::eggifyValue(mlir::Value value) {
 EggifiedOp* Egglog::eggifyOpaqueOperation(mlir::Operation* op) {
     if (op->getNumResults() == 1) {
         return eggifyValue(op->getResult(0));  // backwards compatibility
+    }
+
+    if (op->getNumResults() > 1) {  // each result is its own opaque value, so the result index is not lost
+        std::vector<EggifiedOp*> results;
+        for (mlir::Value result: op->getResults()) {
+            size_t id = nextId();
+            EggifiedOp* eggifiedValue = EggifiedOp::value(id, "(Value " + std::to_string(id) + " " + eggifyType(result.getType()) + ")", result);
+            eggifiedBlock.push_back(eggifiedValue);
+            results.push_back(eggifiedValue);
+        }
+        return results[0];
     }
 
     size_t id = nextId();
@@ -1060,10 +1112,6 @@ std::string Egglog::eggifyBlock(mlir::Block& block) {
 
     ss << "(Blk (vec-of";
     for (mlir::Operation& op: ops) {
-        if (op.getNumResults() > 1) {  // exit if more than one result
-            llvm::outs() << "Skipping operation with more than one result: " << op.getName() << "\n";
-        }
-
         ss << " " << eggifyOperation(&op)->getPrintId();
     }
     ss << "))";

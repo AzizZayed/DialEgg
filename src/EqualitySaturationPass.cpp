@@ -160,12 +160,22 @@ void EqualitySaturationPass::runOnBlock(mlir::Block& block, const std::string& b
 
         mlir::Operation* prevOp = eggOp->mlirOp;
         mlir::OpBuilder builder(prevOp);
-        mlir::Operation* newOp = egglog.parseOperation(lines.back(), builder);
 
-        if (newOp == nullptr) {  // If the operation is an opaque value, replace it with the value
-            mlir::Value value = egglog.parseValue(lines.back());
+        if (lines.back().find("(Value ") == 0 || lines.back().find("(Get ") == 0) {  // The operation was rewritten to an existing value: replace it with the value
+            if (prevOp->getNumResults() != 1) {
+                llvm::errs() << "Cannot replace operation '" << prevOp->getName() << "' with " << prevOp->getNumResults() << " results by the single value '" << lines.back() << "'. Check that the egglog rewrite rules keep the number of results of this operation.\n";
+                exit(1);
+            }
+            mlir::Value value = egglog.parseOperand(lines.back(), builder);
             prevOp->getResult(0).replaceAllUsesWith(value);
             prevOp->erase();
+            continue;
+        }
+
+        mlir::Operation* newOp = egglog.parseOperation(lines.back(), builder);
+
+        if (newOp == nullptr) {  // unreachable: values are handled above
+            continue;
         } else if (newOp != prevOp) {  // Check if the whole operation is different, if so, replace it
             // llvm::outs() << "REPLACING: (" << *prevOp << ") WITH (" << *newOp << ")\n\n";
             prevOp->replaceAllUsesWith(newOp);
