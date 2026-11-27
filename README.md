@@ -151,7 +151,7 @@ func.func @classic(%arg0: i32) -> i32 {
 # Citing DialEgg
 If you use DialEgg, please consider citing the relevant publication:
 
-```
+```bibtex
 @inproceedings{10.1145/3696443.3708957,
 author = {Zayed, Abd-El-Aziz and Dubach, Christophe},
 title = {DialEgg: Dialect-Agnostic MLIR Optimizer using Equality Saturation with Egglog},
