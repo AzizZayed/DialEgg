@@ -147,3 +147,25 @@ func.func @classic(%arg0: i32) -> i32 {
 ## Future Improvements
 - Better support for ops with variadic number of operands and attributes
 - Better support for ops with optional operands and attributes
+
+# Citing DialEgg
+If you use DialEgg, please consider citing the relevant publication:
+
+```
+@inproceedings{10.1145/3696443.3708957,
+author = {Zayed, Abd-El-Aziz and Dubach, Christophe},
+title = {DialEgg: Dialect-Agnostic MLIR Optimizer using Equality Saturation with Egglog},
+year = {2025},
+isbn = {9798400712753},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3696443.3708957},
+doi = {10.1145/3696443.3708957},
+booktitle = {Proceedings of the 23rd ACM/IEEE International Symposium on Code Generation and Optimization},
+pages = {271–283},
+numpages = {13},
+keywords = {Egg, Egglog, Equality Saturation, MLIR},
+location = {Las Vegas, NV, USA},
+series = {CGO '25}
+}
+```
