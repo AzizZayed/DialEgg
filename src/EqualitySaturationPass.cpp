@@ -1,6 +1,7 @@
 #include <map>
 #include <unordered_map>
 #include <vector>
+#include <deque>
 #include <iostream>
 #include <sstream>
 #include <fstream>
@@ -130,6 +131,8 @@ void EqualitySaturationPass::runOnBlock(mlir::Block& block, const std::string& b
         // eggifiedOp->print(llvm::outs());
     }
 
+    egglog.markUnsupportedUsers();
+
     auto end = std::chrono::high_resolution_clock::now();
     mlirToEgglogTime += std::chrono::duration<double>(end - start).count();
 
@@ -145,7 +148,7 @@ void EqualitySaturationPass::runOnBlock(mlir::Block& block, const std::string& b
     std::ifstream file(egglogExtractedFilePath);
 
     // Parse the extracted egglog file and replace the MLIR operations
-    std::vector<std::string> lines;
+    std::deque<std::string> lines;  // stable references: parsed operations are cached by views into these lines
     for (const EggifiedOp* eggOp: egglog.eggifiedBlock) {
         if (!eggOp->shouldBeExtracted()) {
             continue;
@@ -156,16 +159,31 @@ void EqualitySaturationPass::runOnBlock(mlir::Block& block, const std::string& b
         lines.emplace_back();
         std::getline(file, lines.back());
 
+        if (eggOp->extractionKind() == EggifiedOp::ExtractionKind::ForOpaqueUsers) {  // rebuilt with its region, only remember what to repoint its unsupported users to
+            egglog.opaqueUserReplacements[eggOp->mlirOp] = lines.back();
+            continue;
+        }
+
         // llvm::outs() << eggOp.getPrintId() << " = " << line << "\n";
 
         mlir::Operation* prevOp = eggOp->mlirOp;
         mlir::OpBuilder builder(prevOp);
-        mlir::Operation* newOp = egglog.parseOperation(lines.back(), builder);
 
-        if (newOp == nullptr) {  // If the operation is an opaque value, replace it with the value
-            mlir::Value value = egglog.parseValue(lines.back());
+        if (lines.back().find("(Value ") == 0 || lines.back().find("(Get ") == 0) {  // The operation was rewritten to an existing value: replace it with the value
+            if (prevOp->getNumResults() != 1) {
+                llvm::errs() << "Cannot replace operation '" << prevOp->getName() << "' with " << prevOp->getNumResults() << " results by the single value '" << lines.back() << "'. Check that the egglog rewrite rules keep the number of results of this operation.\n";
+                exit(1);
+            }
+            mlir::Value value = egglog.parseOperand(lines.back(), builder);
             prevOp->getResult(0).replaceAllUsesWith(value);
             prevOp->erase();
+            continue;
+        }
+
+        mlir::Operation* newOp = egglog.parseOperation(lines.back(), builder);
+
+        if (newOp == nullptr) {  // unreachable: values are handled above
+            continue;
         } else if (newOp != prevOp) {  // Check if the whole operation is different, if so, replace it
             // llvm::outs() << "REPLACING: (" << *prevOp << ") WITH (" << *newOp << ")\n\n";
             prevOp->replaceAllUsesWith(newOp);

@@ -16,6 +16,10 @@
 ;; (<op_variant> <operand1> <operand2> ... <operandN> <attr1> <attr2> ... <attrM> <region1> <region2> ... <regionR> <type>)
 (datatype Op 
     (Value i64 Type)
+    ;; (Get <op> <index>) is result <index> of a multi-result op (an op declared with several Types)
+    (Get Op i64)
+    ;; (Arg <id> <type>) declares a block argument at the start of a (Blk ...) op vector; <id> is the id of its (Value <id> <type>)
+    (Arg i64 Type)
     (OpaqueOp i64 TypeVec)
     (NoOp)
 )

@@ -1,0 +1,17 @@
+(include "src/base.egg")
+(function arith_constant (AttrPair Type) Op)
+(function arith_addi (Op Op AttrPair Type) Op)
+(function arith_subi (Op Op AttrPair Type) Op)
+(function arith_muli (Op Op AttrPair Type) Op)
+(function scf_yield (Op) Op)
+(function scf_yield_2 (Op Op) Op)
+(function func_return (Op) Op)
+(function func_return_2 (Op Op) Op)
+(function scf_for (Op Op Op Op Op Region Type) Op)
+;; OPS HERE ;;
+;; RULES HERE ;;
+(ruleset rules)
+(let c1 (arith_constant (NamedAttr "value" (IntegerAttr 1 (I32))) (I32)))
+(rewrite (arith_muli ?x c1 ?a (I32)) ?x :ruleset rules)
+(run-schedule (saturate rules))
+;; EXTRACTS HERE ;;

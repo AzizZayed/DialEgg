@@ -794,7 +794,33 @@ mlir::Value Egglog::parseValue(std::string_view valueStr) {
         exit(1);
     }
 
-    return eggifiedOp->mlirValues[0];
+    mlir::Value value = eggifiedOp->mlirValues[0];
+    auto remapped = argRemap.find(value);  // a block argument of a region that was rebuilt
+    return remapped != argRemap.end() ? remapped->second : value;
+}
+
+mlir::Value Egglog::parseOperand(std::string_view operandStr, mlir::OpBuilder& builder) {
+    if (operandStr.find("(Value ") == 0) {
+        return parseValue(operandStr);
+    }
+
+    std::vector<std::string_view> split = splitExpression(operandStr);
+    if (split[0] == "Get") {  // (Get <op> <index>)
+        mlir::Operation* owner = parseOperation(split[1], builder);
+        size_t index = svtoll(split[2]);
+        if (owner == nullptr || index >= owner->getNumResults()) {
+            llvm::errs() << "Invalid result projection '" << operandStr << "': the operation has no result " << index << ". Check that the egglog rewrite rules keep the number of results of multi-result operations.\n";
+            exit(1);
+        }
+        return owner->getResult(index);
+    }
+
+    mlir::Operation* operandOp = parseOperation(operandStr, builder);
+    if (operandOp == nullptr || operandOp->getNumResults() == 0) {
+        llvm::errs() << "Operand '" << operandStr << "' has no result. Check that the egglog rewrite rules only use operations with results as operands.\n";
+        exit(1);
+    }
+    return operandOp->getResult(0);
 }
 
 mlir::Operation* Egglog::parseOperation(std::string_view newOpStr, mlir::OpBuilder& builder) {
@@ -806,7 +832,13 @@ mlir::Operation* Egglog::parseOperation(std::string_view newOpStr, mlir::OpBuild
         return nullptr;
     }
 
-    if (parsedOps.find(newOpStr) != parsedOps.end()) {  // look in the parsed ops cache
+    for (auto scope = parseScopes.rbegin(); scope != parseScopes.rend(); ++scope) {  // look in the parsed ops caches, innermost block first
+        auto found = scope->ops.find(newOpStr);
+        if (found != scope->ops.end()) {
+            return found->second;
+        }
+    }
+    if (parsedOps.find(newOpStr) != parsedOps.end()) {
         return parsedOps[newOpStr];
     }
 
@@ -829,10 +861,8 @@ mlir::Operation* Egglog::parseOperation(std::string_view newOpStr, mlir::OpBuild
         if (operandStr.find("(Value ") == 0) {
             mlir::Value operand = parseValue(operandStr);
             operands.push_back(operand);
-        } else {  // new operation
-            mlir::Operation* nestedOperand = parseOperation(operandStr, builder);
-            mlir::Value operand = nestedOperand->getResult(0);  // TODO support multiple results?
-            operands.push_back(operand);
+        } else {  // new operation, or one result of a multi-result operation
+            operands.push_back(parseOperand(operandStr, builder));
         }
     }
 
@@ -929,7 +959,12 @@ mlir::Operation* Egglog::parseOperation(std::string_view newOpStr, mlir::OpBuild
         newOp = builder.create(state);
     }
 
-    parsedOps[newOpStr] = newOp;  // cache the parsed operation
+    if (parseScopes.empty()) {
+        parsedOps[newOpStr] = newOp;  // cache the parsed operation
+    } else {
+        parseScopes.back().ops[newOpStr] = newOp;
+        parseScopes.back().order.push_back(newOp);
+    }
     return newOp;
 }
 
@@ -949,6 +984,23 @@ std::vector<mlir::Block*> Egglog::parseBlocksFromRegion(std::string_view regionS
     return blocks;
 }
 
+/** Whether `op`, or an operation it depends on that was created while parsing `scope`, uses a value defined in `block`. */
+static bool dependsOnBlock(mlir::Operation* op, mlir::Block* block, const std::set<mlir::Operation*>& created) {
+    for (mlir::Value operand: op->getOperands()) {
+        if (auto arg = mlir::dyn_cast<mlir::BlockArgument>(operand)) {
+            if (arg.getOwner() == block) {
+                return true;
+            }
+        } else if (mlir::Operation* def = operand.getDefiningOp()) {
+            if (def->getBlock() == block || (created.count(def) && dependsOnBlock(def, block, created))) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// (Blk (vec-of (Arg <value-id> <type>)... <op>...)): the leading Arg entries are the block arguments, the rest the operations in order
 mlir::Block* Egglog::parseBlock(std::string_view blockStr, mlir::OpBuilder& builder) {
     std::vector<std::string_view> split = splitExpression(blockStr);
     assert(split[0] == "Blk");
@@ -957,19 +1009,119 @@ mlir::Block* Egglog::parseBlock(std::string_view blockStr, mlir::OpBuilder& buil
     std::vector<std::string_view> opStrs = splitExpression(opVecStr);
 
     mlir::Block* block = new mlir::Block();
+    parseScopes.emplace_back();
+
+    std::vector<std::pair<mlir::Value, mlir::Value>> args;
     for (size_t i = 1; i < opStrs.size(); i++) {
-        mlir::Operation* op = parseOperation(opStrs[i], builder);
-        if (op->getBlock()) {
-            op->remove();
+        std::string_view entry = opStrs[i];
+
+        if (entry.find("(Arg ") == 0) {  // block argument declaration
+            std::vector<std::string_view> argSplit = splitExpression(entry);
+            EggifiedOp* eggifiedArg = findEggifiedOp(static_cast<size_t>(svtoll(argSplit[1])));
+            if (eggifiedArg == nullptr || eggifiedArg->mlirValues.empty()) {
+                llvm::errs() << "Block argument '" << entry << "' was not found. Check that the egglog rewrite rules keep the (Arg ...) entries of (Blk ...) terms.\n";
+                exit(1);
+            }
+            mlir::Value oldArg = eggifiedArg->mlirValues[0];
+            mlir::Value newArg = block->addArgument(oldArg.getType(), oldArg.getLoc());
+            argRemap[oldArg] = newArg;
+            args.emplace_back(oldArg, newArg);
+        } else if (entry.find("(Value ") == 0) {  // an existing value: an unsupported operation of the region, or an operation that was rewritten to a value
+            EggifiedOp* eggified = findEggifiedOp(static_cast<size_t>(svtoll(splitExpression(entry)[1])));
+            mlir::Operation* opaqueOp = eggified != nullptr ? eggified->mlirOp : nullptr;
+            if (opaqueOp != nullptr && regionOpaqueOps.count(opaqueOp) && opaqueOp->getBlock() != block) {
+                regionOpaqueOps.erase(opaqueOp);  // moved once, at its first position
+                opaqueOp->remove();
+                block->push_back(opaqueOp);
+
+                // an unsupported operation is not rebuilt, so repoint its operands to the rebuilt operations they were rewritten to
+                std::vector<std::pair<mlir::OpOperand*, mlir::Value>> repointed;
+                opaqueOp->walk([&](mlir::Operation* inner) {
+                    for (mlir::OpOperand& operand: inner->getOpOperands()) {
+                        auto result = mlir::dyn_cast<mlir::OpResult>(operand.get());
+                        auto replacement = result ? opaqueUserReplacements.find(result.getOwner()) : opaqueUserReplacements.end();
+                        if (replacement == opaqueUserReplacements.end()) {
+                            continue;
+                        }
+                        if (replacement->second.find("(Value ") == 0 || replacement->second.find("(Get ") == 0) {
+                            repointed.emplace_back(&operand, parseOperand(replacement->second, builder));
+                        } else {
+                            mlir::Operation* rebuilt = parseOperation(replacement->second, builder);
+                            repointed.emplace_back(&operand, rebuilt->getResult(result.getResultNumber()));
+                        }
+                    }
+                });
+                for (auto [operand, value]: repointed) {
+                    operand->set(value);
+                }
+            }  // otherwise nothing to place: block arguments and operations placed elsewhere are not operations of this block
+        } else {
+            mlir::Operation* op = parseOperation(entry, builder);
+            if (op->getBlock() == block) {  // listed twice (the e-graph merged equal operations)
+                continue;
+            }
+            if (op->getBlock()) {
+                op->remove();
+            }
+            block->push_back(op);
         }
-        block->push_back(op);
     }
+
+    // Operations created for operand subtrees but not listed in the block were created outside of the block's region:
+    // those that depend on values of this block must move in, right before their first user.
+    std::set<mlir::Operation*> created(parseScopes.back().order.begin(), parseScopes.back().order.end());
+    for (auto it = parseScopes.back().order.rbegin(); it != parseScopes.back().order.rend(); ++it) {
+        mlir::Operation* helper = *it;
+        if (helper->getBlock() == block || !dependsOnBlock(helper, block, created)) {
+            continue;
+        }
+
+        mlir::Operation* firstUser = nullptr;
+        for (mlir::Operation* user: helper->getUsers()) {
+            mlir::Operation* inBlock = block->findAncestorOpInBlock(*user);
+            if (inBlock != nullptr && (firstUser == nullptr || inBlock->isBeforeInBlock(firstUser))) {
+                firstUser = inBlock;
+            }
+        }
+        if (firstUser == nullptr) {
+            llvm::errs() << "Operation '" << helper->getName() << "' depends on values of a rebuilt block but has no user in it. Check the egglog rewrite rules that introduced it.\n";
+            exit(1);
+        }
+        helper->remove();
+        block->getOperations().insert(firstUser->getIterator(), helper);
+    }
+
+    // operations moved into the block (unsupported ones) still use the original block arguments
+    for (auto [oldArg, newArg]: args) {
+        oldArg.replaceUsesWithIf(newArg, [&](mlir::OpOperand& use) { return block->findAncestorOpInBlock(*use.getOwner()) != nullptr; });
+    }
+
+    parseScopes.pop_back();
 
     return block;
 }
 
 // (Value <id> <type>)
 EggifiedOp* Egglog::eggifyValue(mlir::Value value) {
+    // one result of a multi-result operation is `(Get <op> <index>)`, so that the result index survives the round trip
+    if (auto result = mlir::dyn_cast<mlir::OpResult>(value); result && result.getOwner()->getNumResults() > 1) {
+        EggifiedOp* owner = eggifyOperation(result.getOwner());
+        if (!owner->opaque) {
+            for (EggifiedOp* eggified: eggifiedBlock) {
+                if (eggified->projection && eggified->operands[0] == owner && eggified->mlirValues[0] == value) {
+                    return eggified;
+                }
+            }
+
+            size_t id = nextId();
+            std::string egglogOp = "(Get " + owner->getPrintId() + " " + std::to_string(result.getResultNumber()) + ")";
+            EggifiedOp* projection = EggifiedOp::resultProjection(id, egglogOp, owner, value);
+            owner->addUser(projection);
+            eggifiedBlock.push_back(projection);
+            return projection;
+        }
+    }
+
     EggifiedOp* foundEggifiedOp = findEggifiedOp(value);
     if (foundEggifiedOp != nullptr) {
         return foundEggifiedOp;
@@ -987,6 +1139,17 @@ EggifiedOp* Egglog::eggifyValue(mlir::Value value) {
 EggifiedOp* Egglog::eggifyOpaqueOperation(mlir::Operation* op) {
     if (op->getNumResults() == 1) {
         return eggifyValue(op->getResult(0));  // backwards compatibility
+    }
+
+    if (op->getNumResults() > 1) {  // each result is its own opaque value, so the result index is not lost
+        std::vector<EggifiedOp*> results;
+        for (mlir::Value result: op->getResults()) {
+            size_t id = nextId();
+            EggifiedOp* eggifiedValue = EggifiedOp::value(id, "(Value " + std::to_string(id) + " " + eggifyType(result.getType()) + ")", result);
+            eggifiedBlock.push_back(eggifiedValue);
+            results.push_back(eggifiedValue);
+        }
+        return results[0];
     }
 
     size_t id = nextId();
@@ -1045,6 +1208,7 @@ EggifiedOp* Egglog::eggifyOperation(mlir::Operation* op) {
     ss << ")";
 
     EggifiedOp* eggifiedOp = EggifiedOp::op(nextId(), ss.str(), operands, op);
+    eggifiedOp->nested = regionDepth > 0;
     for (EggifiedOp* operand: eggifiedOp->operands) {
         operand->addUser(eggifiedOp);
     }
@@ -1059,12 +1223,19 @@ std::string Egglog::eggifyBlock(mlir::Block& block) {
     mlir::Block::OpListType& ops = block.getOperations();
 
     ss << "(Blk (vec-of";
+    for (mlir::BlockArgument arg: block.getArguments()) {  // declare the block arguments first: `(Arg <id of the (Value ...)> <type>)`
+        EggifiedOp* eggifiedArg = eggifyValue(arg);
+        size_t id = nextId();
+        EggifiedOp* declaration = new EggifiedOp(id, true, "(Arg " + std::to_string(eggifiedArg->id) + " " + eggifyType(arg.getType()) + ")", {}, {}, nullptr);
+        eggifiedBlock.push_back(declaration);
+        ss << " " << declaration->getPrintId();
+    }
     for (mlir::Operation& op: ops) {
-        if (op.getNumResults() > 1) {  // exit if more than one result
-            llvm::outs() << "Skipping operation with more than one result: " << op.getName() << "\n";
+        EggifiedOp* eggified = eggifyOperation(&op);
+        if (eggified->opaque && regionDepth > 0) {
+            regionOpaqueOps.insert(&op);
         }
-
-        ss << " " << eggifyOperation(&op)->getPrintId();
+        ss << " " << eggified->getPrintId();
     }
     ss << "))";
     return ss.str();
@@ -1075,12 +1246,29 @@ std::string Egglog::eggifyRegion(mlir::Region& region) {
 
     mlir::Region::BlockListType& blocks = region.getBlocks();
 
+    regionDepth++;
     ss << "(Reg (vec-of";
     for (mlir::Block& block: blocks) {
         ss << " " << eggifyBlock(block);
     }
     ss << "))";
+    regionDepth--;
     return ss.str();
+}
+
+void Egglog::markUnsupportedUsers() {
+    for (EggifiedOp* eggified: eggifiedBlock) {
+        if (eggified->opaque || eggified->projection || eggified->mlirOp == nullptr) {
+            continue;
+        }
+        for (mlir::Operation* user: eggified->mlirOp->getUsers()) {
+            EggifiedOp* eggifiedUser = findEggifiedOp(user);
+            if (eggifiedUser == nullptr || eggifiedUser->opaque) {
+                eggified->hasUnsupportedUser = true;
+                break;
+            }
+        }
+    }
 }
 
 std::optional<EgglogOpDef> Egglog::findEgglogOpDef(mlir::Operation* op) {
